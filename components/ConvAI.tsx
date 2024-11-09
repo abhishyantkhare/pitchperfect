@@ -32,43 +32,85 @@ type Participant = {
   id: number;
   name: string;
   avatar: string;
-  speaking: boolean;
   agentId: string;
-  session: Conversation | null; // Ensure session is of type Conversation or null
 };
 
+let updateQueue: (() => void)[] = [];
+let isProcessingQueue = false;
+let currentSpeakerId: number | null = null;
+
+function processQueue() {
+  if (isProcessingQueue || updateQueue.length === 0) return;
+  isProcessingQueue = true;
+
+  const updateFunction = updateQueue.shift();
+  if (updateFunction) {
+    updateFunction();
+  }
+
+  isProcessingQueue = false;
+
+  if (updateQueue.length > 0) {
+    setTimeout(processQueue, 0); // Schedule the next queue processing
+  }
+}
+
+function queueUpdate(updateFunction: () => void) {
+  updateQueue.push(updateFunction);
+  if (!isProcessingQueue) {
+    processQueue();
+  }
+}
+
 export function ConvAI() {
-  const [conversation, setConversation] = useState<Conversation | null>(null);
-  const [conversation2, setConversation2] = useState<Conversation | null>(null);
-  const [isConnected, setIsConnected] = useState(false);
-  const [isSpeaking, setIsSpeaking] = useState(false);
-  const [isConnected2, setIsConnected2] = useState(false);
-  const [isSpeaking2, setIsSpeaking2] = useState(false);
-  const [currentSpeakerId, setCurrentSpeakerId] = useState<number | null>(null);
   const [participants, setParticipants] = useState<Participant[]>([
     {
       id: 1,
       name: "John Doe",
       avatar: "/placeholder.svg?height=40&width=40",
-      speaking: false,
       agentId: "K0PRQtUKFWGL4wTjQ1i6",
-      session: null,
     },
     {
       id: 2,
       name: "Jane Smith",
       avatar: "/placeholder.svg?height=40&width=40",
-      speaking: false,
       agentId: "RdcFm7gBumcTAb8zgExV",
-      session: null,
     },
     // Add agent IDs for other participants as needed
   ]);
+
+  const [sessions, setSessions] = useState<{
+    [key: number]: Conversation | null;
+  }>({
+    1: null,
+    2: null,
+    // Initialize other participant sessions as needed
+  });
+
   const [time, setTime] = useState(0);
   const [isRunning, setIsRunning] = useState(false);
 
   useEffect(() => {
-    console.log(`currentSpeakerId: ${currentSpeakerId}`);
+    if (currentSpeakerId === null) {
+      for (const entry of Object.entries(sessions)) {
+        const [id, session] = entry;
+        if (session) {
+          console.log(`setting volume to 0 for ${id}`);
+          session.setVolume({ volume: 0 });
+        }
+      }
+    } else {
+      for (const entry of Object.entries(sessions)) {
+        const [id, session] = entry;
+        if (Number(id) === currentSpeakerId) {
+          console.log(`setting volume to 0.5 for ${id}`);
+          session?.setVolume({ volume: 0.5 });
+        } else {
+          console.log(`setting volume to 0 for ${id}`);
+          session?.setVolume({ volume: 0 });
+        }
+      }
+    }
   }, [currentSpeakerId]);
 
   useEffect(() => {
@@ -94,6 +136,7 @@ export function ConvAI() {
     switch (action) {
       case "start":
         startAllConversations();
+        currentSpeakerId = 1;
         setIsRunning(true);
         break;
       case "resume":
@@ -104,6 +147,7 @@ export function ConvAI() {
         break;
       case "finish":
         setIsRunning(false);
+        currentSpeakerId = null;
         endConversation();
         break;
     }
@@ -116,50 +160,48 @@ export function ConvAI() {
       return;
     }
 
-    const updatedParticipants = await Promise.all(
+    const updatedSessions = await Promise.all(
       participants.map(async (participant) => {
         const session = await Conversation.startSession({
           agentId: participant.agentId,
           onConnect: () => {
-            setIsConnected(true);
+            console.log(`${participant.name} connected`);
           },
           onDisconnect: () => {
-            setIsConnected(false);
-            setIsSpeaking(false);
+            console.log(`${participant.name} disconnected`);
           },
           onError: (error) => {
             console.log(error);
             alert("An error occurred during the conversation");
           },
           onModeChange: ({ mode }) => {
-            setParticipants((prevParticipants) =>
-              prevParticipants.map((p) => {
-                console.log(`onModeChange: ${p.id} ${mode}`);
-                if (p.id === participant.id) {
-                  if (mode === "speaking") {
-                    if (currentSpeakerId === null) {
-                      setCurrentSpeakerId(p.id);
-                      p.session?.setVolume({ volume: 0.5 });
-                      return { ...p, speaking: true, volume: 0.5 };
-                    }
-                  } else if (mode === "listening") {
-                    if (currentSpeakerId === p.id) {
-                      setCurrentSpeakerId(null);
-                      p.session?.setVolume({ volume: 0 });
-                      return { ...p, speaking: false, volume: 0 };
-                    }
-                  }
-                }
-                return p;
-              })
-            );
+            if (mode === "speaking") {
+              if (currentSpeakerId === null) {
+                currentSpeakerId = participant.id;
+              }
+            } else {
+              if (currentSpeakerId === participant.id) {
+                currentSpeakerId = null;
+              }
+            }
           },
         });
-        return { ...participant, session };
+        if (participant.id === currentSpeakerId) {
+          session.setVolume({ volume: 0.5 });
+        } else {
+          session.setVolume({ volume: 0 });
+        }
+        return { id: participant.id, session };
       })
     );
 
-    setParticipants(updatedParticipants);
+    setSessions((prevSessions) => {
+      const newSessions = { ...prevSessions };
+      updatedSessions.forEach(({ id, session }) => {
+        newSessions[id] = session;
+      });
+      return newSessions;
+    });
   }
 
   function randomlySelectAgentToSpeak() {
@@ -174,14 +216,20 @@ export function ConvAI() {
 
   async function endConversation() {
     for (const participant of participants) {
-      if (participant.session) {
-        await participant.session.endSession();
+      const session = sessions[participant.id];
+      if (session) {
+        await session.endSession();
       }
     }
+    setSessions((prevSessions) =>
+      Object.keys(prevSessions).reduce((acc, key) => {
+        acc[Number(key)] = null;
+        return acc;
+      }, {} as { [key: number]: Conversation | null })
+    );
     setParticipants((prevParticipants) =>
       prevParticipants.map((participant) => ({
         ...participant,
-        session: null,
         speaking: false,
       }))
     );
@@ -199,7 +247,7 @@ export function ConvAI() {
               key={participant.id}
               className={cn(
                 "bg-card text-card-foreground min-w-[200px] sm:min-w-[300px] md:min-w-[500px]",
-                participant.speaking ? "border-blue-500" : ""
+                participant.id === currentSpeakerId ? "border-blue-500" : ""
               )}
             >
               <CardContent className="p-4">
