@@ -141,12 +141,13 @@ export async function POST(request: Request) {
     });
 
     const elevenLabsData = await elevenLabsResponse.json();
+    console.log(elevenLabsData);
 
     // Update the agent in Supabase with the voice details
     const { error: updateError } = await supabase
       .from('agents')
       .update({
-        elevenlabs_id: elevenLabsData.id,
+        elevenlabs_id: elevenLabsData.agent_id,
         elevenlabs_voice_id: voiceId,
         creation_status: 'ready'
       })
