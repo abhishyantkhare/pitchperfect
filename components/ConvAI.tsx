@@ -4,7 +4,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { Conversation } from "@11labs/client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Mic, Video, PhoneOff } from "lucide-react";
 
 async function requestMicrophonePermission() {
   try {
@@ -25,6 +27,16 @@ async function getSignedUrl(): Promise<string> {
   return data.signedUrl;
 }
 
+// Define a type for the participant
+type Participant = {
+  id: number;
+  name: string;
+  avatar: string;
+  speaking: boolean;
+  agentId: string;
+  session: Conversation | null; // Ensure session is of type Conversation or null
+};
+
 export function ConvAI() {
   const [conversation, setConversation] = useState<Conversation | null>(null);
   const [conversation2, setConversation2] = useState<Conversation | null>(null);
@@ -32,183 +44,227 @@ export function ConvAI() {
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isConnected2, setIsConnected2] = useState(false);
   const [isSpeaking2, setIsSpeaking2] = useState(false);
+  const [currentSpeakerId, setCurrentSpeakerId] = useState<number | null>(null);
+  const [participants, setParticipants] = useState<Participant[]>([
+    {
+      id: 1,
+      name: "John Doe",
+      avatar: "/placeholder.svg?height=40&width=40",
+      speaking: false,
+      agentId: "K0PRQtUKFWGL4wTjQ1i6",
+      session: null,
+    },
+    {
+      id: 2,
+      name: "Jane Smith",
+      avatar: "/placeholder.svg?height=40&width=40",
+      speaking: false,
+      agentId: "RdcFm7gBumcTAb8zgExV",
+      session: null,
+    },
+    // Add agent IDs for other participants as needed
+  ]);
+  const [time, setTime] = useState(0);
+  const [isRunning, setIsRunning] = useState(false);
 
-  async function startConversation() {
+  useEffect(() => {
+    console.log(`currentSpeakerId: ${currentSpeakerId}`);
+  }, [currentSpeakerId]);
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (isRunning) {
+      interval = setInterval(() => {
+        setTime((prevTime) => prevTime + 1);
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [isRunning]);
+
+  const formatTime = (seconds: number) => {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+    return `${hours.toString().padStart(2, "0")}:${minutes
+      .toString()
+      .padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+  };
+
+  const handleCommand = (action: string) => {
+    switch (action) {
+      case "start":
+        startAllConversations();
+        setIsRunning(true);
+        break;
+      case "resume":
+        setIsRunning(true);
+        break;
+      case "pause":
+        setIsRunning(false);
+        break;
+      case "finish":
+        setIsRunning(false);
+        endConversation();
+        break;
+    }
+  };
+
+  async function startAllConversations() {
     const hasPermission = await requestMicrophonePermission();
     if (!hasPermission) {
       alert("No permission");
       return;
     }
-    const conversation = await Conversation.startSession({
-      agentId: "HZxr3eErj3VsZi8TKms4",
-      onConnect: () => {
-        setIsConnected(true);
-      },
-      onDisconnect: () => {
-        setIsConnected(false);
-        setIsSpeaking(false);
-      },
-      onError: (error) => {
-        console.log(error);
-        alert("An error occurred during the conversation");
-      },
-      onModeChange: ({ mode }) => {
-        const currentMinutes = new Date().getMinutes();
-        if (currentMinutes % 2 === 0) {
-          setIsSpeaking(true);
-          setIsSpeaking2(false);
-          conversation?.setVolume({ volume: 0.5 });
-          conversation2?.setVolume({ volume: 0 });
-        } else {
-          setIsSpeaking(false);
-          setIsSpeaking2(true);
-          conversation?.setVolume({ volume: 0 });
-          conversation2?.setVolume({ volume: 0.5 });
-        }
-      },
-    });
-    setConversation(conversation);
-  }
 
-  async function startBothConversations() {
-    await startConversation();
-    const conversation2 = await Conversation.startSession({
-      agentId: "juZb7Lt8KJdZMRsdru1y",
-      onConnect: () => {
-        setIsConnected2(true);
-      },
-      onDisconnect: () => {
-        setIsConnected2(false);
-        setIsSpeaking2(false);
-      },
-      onError: (error) => {
-        console.log(error);
-        alert("An error occurred during the conversation");
-      },
-      onModeChange: ({ mode }) => {
-        const currentMinutes = new Date().getMinutes();
-        if (currentMinutes % 2 === 0) {
-          setIsSpeaking(true);
-          setIsSpeaking2(false);
-          conversation?.setVolume({ volume: 0.5 });
-          conversation2?.setVolume({ volume: 0 });
-        } else {
-          setIsSpeaking(false);
-          setIsSpeaking2(true);
-          conversation?.setVolume({ volume: 0 });
-          conversation2?.setVolume({ volume: 0.5 });
-        }
-      },
-    });
-    setConversation2(conversation2);
+    const updatedParticipants = await Promise.all(
+      participants.map(async (participant) => {
+        const session = await Conversation.startSession({
+          agentId: participant.agentId,
+          onConnect: () => {
+            setIsConnected(true);
+          },
+          onDisconnect: () => {
+            setIsConnected(false);
+            setIsSpeaking(false);
+          },
+          onError: (error) => {
+            console.log(error);
+            alert("An error occurred during the conversation");
+          },
+          onModeChange: ({ mode }) => {
+            setParticipants((prevParticipants) =>
+              prevParticipants.map((p) => {
+                console.log(`onModeChange: ${p.id} ${mode}`);
+                if (p.id === participant.id) {
+                  if (mode === "speaking") {
+                    if (currentSpeakerId === null) {
+                      setCurrentSpeakerId(p.id);
+                      p.session?.setVolume({ volume: 0.5 });
+                      return { ...p, speaking: true, volume: 0.5 };
+                    }
+                  } else if (mode === "listening") {
+                    if (currentSpeakerId === p.id) {
+                      setCurrentSpeakerId(null);
+                      p.session?.setVolume({ volume: 0 });
+                      return { ...p, speaking: false, volume: 0 };
+                    }
+                  }
+                }
+                return p;
+              })
+            );
+          },
+        });
+        return { ...participant, session };
+      })
+    );
+
+    setParticipants(updatedParticipants);
   }
 
   function randomlySelectAgentToSpeak() {
     const currentMinutes = new Date().getMinutes();
-    if (currentMinutes % 2 === 0) {
-      setIsSpeaking(true);
-      setIsSpeaking2(false);
-    } else {
-      setIsSpeaking(false);
-      setIsSpeaking2(true);
-    }
+    setParticipants((prevParticipants) =>
+      prevParticipants.map((participant, index) => ({
+        ...participant,
+        speaking: index % 2 === currentMinutes % 2,
+      }))
+    );
   }
 
   async function endConversation() {
-    if (conversation) {
-      await conversation.endSession();
-      setConversation(null);
+    for (const participant of participants) {
+      if (participant.session) {
+        await participant.session.endSession();
+      }
     }
-    if (conversation2) {
-      await conversation2.endSession();
-      setConversation2(null);
-    }
+    setParticipants((prevParticipants) =>
+      prevParticipants.map((participant) => ({
+        ...participant,
+        session: null,
+        speaking: false,
+      }))
+    );
   }
 
   return (
-    <div className={"flex justify-center items-center gap-x-4"}>
-      <Card className={"rounded-3xl"}>
-        <CardContent>
-          <CardHeader>
-            <CardTitle className={"text-center"}>
-              {isConnected
-                ? isSpeaking
-                  ? `Agent 1 is speaking`
-                  : "Agent 1 is listening"
-                : "Agent 1 Disconnected"}
-            </CardTitle>
-          </CardHeader>
-          <div className={"flex flex-col gap-y-4 text-center"}>
-            <div
+    <div className="min-h-screen bg-background text-foreground flex flex-col dark">
+      <main className="flex flex-grow p-4 overflow-auto  h-full items-center justify-center">
+        <div
+          className="flex flex-wrap gap-4 justify-center items-center h-full"
+          style={{ height: "100%" }}
+        >
+          {participants.map((participant) => (
+            <Card
+              key={participant.id}
               className={cn(
-                "orb my-16 mx-12",
-                isSpeaking ? "animate-orb" : conversation && "animate-orb-slow",
-                isConnected ? "orb-active" : "orb-inactive"
+                "bg-card text-card-foreground min-w-[200px] sm:min-w-[300px] md:min-w-[500px]",
+                participant.speaking ? "border-blue-500" : ""
               )}
-            ></div>
-          </div>
-        </CardContent>
-      </Card>
-
-      <Card className={"rounded-3xl"}>
-        <CardContent>
-          <CardHeader>
-            <CardTitle className={"text-center"}>
-              {isConnected2
-                ? isSpeaking2
-                  ? `Agent 2 is speaking`
-                  : "Agent 2 is listening"
-                : "Agent 2 Disconnected"}
-            </CardTitle>
-          </CardHeader>
-          <div className={"flex flex-col gap-y-4 text-center"}>
-            <div
-              className={cn(
-                "orb my-16 mx-12",
-                isSpeaking2
-                  ? "animate-orb"
-                  : conversation2 && "animate-orb-slow",
-                isConnected2 ? "orb-active" : "orb-inactive"
-              )}
-            ></div>
-          </div>
-        </CardContent>
-      </Card>
-
-      <div className={"flex flex-col gap-y-4 text-center"}>
-        <Button
-          variant={"outline"}
-          className={"rounded-full"}
-          size={"lg"}
-          disabled={conversation !== null && isConnected}
-          onClick={startConversation}
-        >
-          Start conversation 1
-        </Button>
-        <Button
-          variant={"outline"}
-          className={"rounded-full"}
-          size={"lg"}
-          disabled={conversation2 !== null && isConnected2}
-          onClick={startBothConversations}
-        >
-          Start both conversations
-        </Button>
-        <Button
-          variant={"outline"}
-          className={"rounded-full"}
-          size={"lg"}
-          disabled={
-            conversation === null &&
-            !isConnected &&
-            conversation2 === null &&
-            !isConnected2
-          }
-          onClick={endConversation}
-        >
-          End conversation
-        </Button>
-      </div>
+            >
+              <CardContent className="p-4">
+                <div className="aspect-video bg-muted rounded-lg mb-2"></div>
+                <div className="flex items-center gap-2">
+                  <Avatar>
+                    <AvatarImage
+                      src={participant.avatar}
+                      alt={participant.name}
+                    />
+                    <AvatarFallback>
+                      {participant.name
+                        .split(" ")
+                        .map((n) => n[0])
+                        .join("")}
+                    </AvatarFallback>
+                  </Avatar>
+                  <span className="font-medium">{participant.name}</span>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </main>
+      <div className="border-t border-border p-4 flex flex-col sm:flex-row gap-4">
+        <Card className="flex-grow bg-card text-card-foreground">
+          <CardContent className="p-4 flex items-center gap-4">
+            <div className="aspect-video bg-muted rounded-lg w-40"></div>
+            <div>
+              <h3 className="font-semibold">Your Video</h3>
+              <p className="text-sm text-muted-foreground">You</p>
+            </div>
+            <div className="ml-auto flex gap-2">
+              <Button size="icon" variant="outline">
+                <Mic className="h-4 w-4" />
+              </Button>
+              <Button size="icon" variant="outline">
+                <Video className="h-4 w-4" />
+              </Button>
+              <Button size="icon" variant="destructive">
+                <PhoneOff className="h-4 w-4" />
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="w-full sm:w-auto bg-card text-card-foreground">
+          <CardContent className="p-4">
+            <div className="text-2xl font-bold mb-2">{formatTime(time)}</div>
+            <div>
+              <Button onClick={() => handleCommand("start")} className="m-1">
+                Start
+              </Button>
+              <Button onClick={() => handleCommand("pause")} className="m-1">
+                Pause
+              </Button>
+              <Button onClick={() => handleCommand("resume")} className="m-1">
+                Resume
+              </Button>
+              <Button onClick={() => handleCommand("finish")} className="m-1">
+                Finish
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </div>{" "}
     </div>
   );
 }
