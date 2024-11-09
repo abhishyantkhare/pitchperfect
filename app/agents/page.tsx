@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 
 interface Agent {
@@ -20,7 +21,12 @@ interface Agent {
 }
 
 export default function AgentsPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const presentationId = searchParams.get("presentationId");
+
   const [customAgents, setCustomAgents] = useState<Agent[]>([]);
+  const [selectedAgents, setSelectedAgents] = useState<string[]>([]);
   const [showNewAgentForm, setShowNewAgentForm] = useState(false);
   const [newAgent, setNewAgent] = useState({
     name: "",
@@ -33,8 +39,13 @@ export default function AgentsPage() {
   const voiceDescriptionRemaining = 20 - newAgent.voiceDescription.length;
 
   useEffect(() => {
+    if (!presentationId) {
+      // Redirect to home if no presentationId
+      router.push("/");
+      return;
+    }
     fetchAgents();
-  }, []);
+  }, [presentationId, router]);
 
   const fetchAgents = async () => {
     try {
@@ -48,8 +59,45 @@ export default function AgentsPage() {
   };
 
   const handleSelectAgent = (agentId: string) => {
-    console.log("Selected agent:", agentId);
-    // TODO: Handle agent selection
+    setSelectedAgents((prev) => {
+      if (prev.includes(agentId)) {
+        return prev.filter((id) => id !== agentId);
+      }
+      return [...prev, agentId];
+    });
+  };
+
+  const handleStartPractice = async () => {
+    if (selectedAgents.length === 0 || !presentationId) return;
+
+    setIsLoading(true);
+    try {
+      const response = await fetch("/api/setup-presentation", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          presentationId,
+          agentIds: selectedAgents,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to setup presentation");
+      }
+
+      const data = await response.json();
+      if (data.success) {
+        // TODO: Navigate to practice session
+        router.push(`/practice/${presentationId}`);
+      }
+    } catch (error) {
+      console.error("Error setting up practice:", error);
+      // You might want to show an error message to the user here
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleCreateAgent = async () => {
@@ -82,45 +130,85 @@ export default function AgentsPage() {
     }
   };
 
-  const renderAgentCard = (agent: any) => (
-    <Card
-      key={agent.id}
-      className="bg-gray-900 border-gray-800 hover:border-gray-700 transition-all duration-300 cursor-pointer group"
-      onClick={() => handleSelectAgent(agent.id)}
-    >
-      <CardHeader className="space-y-1">
-        <div className="flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-gray-800 text-blue-400 group-hover:text-blue-300 transition-colors">
-            {agent.icon || (
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="24"
-                height="24"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                <circle cx="12" cy="7" r="4" />
-              </svg>
-            )}
+  const renderAgentCard = (agent: any) => {
+    const isSelected = selectedAgents.includes(agent.id);
+
+    return (
+      <Card
+        key={agent.id}
+        className={`bg-gray-900 border-gray-800 transition-all duration-300 cursor-pointer group
+          ${
+            isSelected
+              ? "ring-2 ring-blue-500 border-blue-500"
+              : "hover:border-gray-700"
+          }`}
+        onClick={() => handleSelectAgent(agent.id)}
+      >
+        <CardHeader className="space-y-1">
+          <div className="flex items-center gap-3">
+            <div
+              className={`p-2 rounded-lg bg-gray-800 transition-colors
+              ${
+                isSelected
+                  ? "text-blue-400"
+                  : "text-gray-400 group-hover:text-blue-400"
+              }`}
+            >
+              {agent.icon || (
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="24"
+                  height="24"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                  <circle cx="12" cy="7" r="4" />
+                </svg>
+              )}
+            </div>
+            <CardTitle className="text-xl text-white">{agent.name}</CardTitle>
           </div>
-          <CardTitle className="text-xl text-white">{agent.name}</CardTitle>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <CardDescription className="text-gray-400 text-base">
-          {agent.persona}
-        </CardDescription>
-        <Button className="mt-6 w-full bg-blue-600 hover:bg-blue-700 text-white transition-colors">
-          Practice with {agent.name}
-        </Button>
-      </CardContent>
-    </Card>
-  );
+        </CardHeader>
+        <CardContent>
+          <CardDescription className="text-gray-400 text-base">
+            {agent.persona}
+          </CardDescription>
+          <div className="mt-6 flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              {isSelected && (
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="text-blue-400"
+                >
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+              )}
+              <span
+                className={`text-sm ${
+                  isSelected ? "text-blue-400" : "text-gray-400"
+                }`}
+              >
+                {isSelected ? "Selected" : "Click to select"}
+              </span>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  };
 
   return (
     <div className="min-h-screen bg-black w-screen">
@@ -131,18 +219,31 @@ export default function AgentsPage() {
               Choose Your Audience
             </h1>
             <p className="text-gray-400 text-lg max-w-2xl mx-auto">
-              Select different personas that will be present in your practice
+              Select one or more personas that will be present in your practice
               session.
             </p>
           </div>
 
-          <div className="flex justify-center">
+          <div className="flex justify-center gap-4">
             <Button
               onClick={() => setShowNewAgentForm(!showNewAgentForm)}
               className="bg-blue-600 hover:bg-blue-700 transition-colors"
             >
               {showNewAgentForm ? "Cancel" : "Create Custom Persona"}
             </Button>
+            {selectedAgents.length > 0 && (
+              <Button
+                onClick={handleStartPractice}
+                className="bg-green-600 hover:bg-green-700 transition-colors"
+                disabled={isLoading}
+              >
+                {isLoading
+                  ? "Setting up..."
+                  : `Start Practice with ${selectedAgents.length} ${
+                      selectedAgents.length === 1 ? "Persona" : "Personas"
+                    }`}
+              </Button>
+            )}
           </div>
 
           {showNewAgentForm && (

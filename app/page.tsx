@@ -1,11 +1,14 @@
 "use client";
 import { Button } from "@/components/ui/button";
+import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
 
 export default function Home() {
+  const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [topic, setTopic] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleUploadClick = () => {
     fileInputRef.current?.click();
@@ -35,21 +38,28 @@ export default function Home() {
       return;
     }
 
-    const formData = new FormData();
-    formData.append("topic", topic);
-    uploadedFiles.forEach((file) => {
-      formData.append("files", file);
-    });
+    setIsLoading(true);
+    try {
+      const formData = new FormData();
+      formData.append("topic", topic);
+      uploadedFiles.forEach((file) => {
+        formData.append("files", file);
+      });
 
-    const response = await fetch("/api/presentation", {
-      method: "POST",
-      body: formData,
-    });
+      const response = await fetch("/api/presentation", {
+        method: "POST",
+        body: formData,
+      });
 
-    const data = await response.json();
-    if (data.id) {
-      console.log("Created presentation:", data.id);
-      // TODO: Handle successful creation (e.g., redirect to presentation page)
+      const data = await response.json();
+      if (data.id) {
+        router.push(`/agents?presentationId=${data.id}`);
+      }
+    } catch (error) {
+      console.error("Error creating presentation:", error);
+      // You might want to show an error message to the user here
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -72,8 +82,9 @@ export default function Home() {
               className="bg-blue-600 hover:bg-blue-700 transition-colors p-6"
               size="lg"
               onClick={handleCreatePresentation}
+              disabled={isLoading || !topic.trim()}
             >
-              Go
+              {isLoading ? "Creating..." : "Go"}
             </Button>
           </div>
           <input
