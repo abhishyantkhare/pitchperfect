@@ -17,6 +17,11 @@ interface Agent {
   name: string;
   persona: string;
   elevenlabs_id: string;
+  creation_status:
+    | "generating_voice"
+    | "setting_up_persona"
+    | "ready"
+    | "failed";
   created_at: string;
 }
 
@@ -40,11 +45,12 @@ export default function AgentsPage() {
 
   useEffect(() => {
     if (!presentationId) {
-      // Redirect to home if no presentationId
       router.push("/");
       return;
     }
     fetchAgents();
+    const interval = setInterval(fetchAgents, 2000);
+    return () => clearInterval(interval);
   }, [presentationId, router]);
 
   const fetchAgents = async () => {
@@ -120,6 +126,22 @@ export default function AgentsPage() {
       if (!response.ok) throw new Error("Failed to create agent");
 
       const data = await response.json();
+      // Setup voice
+      // Trigger voice setup in background
+      fetch("/api/agents/setup-voice", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          agentId: data.id,
+          name: newAgent.name,
+          persona: newAgent.persona,
+          voiceDescription: newAgent.voiceDescription,
+        }),
+      }).catch((error) => {
+        console.error("Error triggering voice setup:", error);
+      });
       setCustomAgents((prev) => [...prev, data]);
       setNewAgent({ name: "", persona: "", voiceDescription: "" });
       setShowNewAgentForm(false);
@@ -130,19 +152,127 @@ export default function AgentsPage() {
     }
   };
 
-  const renderAgentCard = (agent: any) => {
+  const getStatusDisplay = (status: Agent["creation_status"]) => {
+    switch (status) {
+      case "generating_voice":
+        return {
+          text: "Generating voice...",
+          color: "text-yellow-400",
+          icon: (
+            <svg
+              className="animate-spin -ml-1 mr-3 h-5 w-5 text-yellow-400"
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+            >
+              <circle
+                className="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                strokeWidth="4"
+              ></circle>
+              <path
+                className="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+              ></path>
+            </svg>
+          ),
+        };
+      case "setting_up_persona":
+        return {
+          text: "Setting up persona...",
+          color: "text-blue-400",
+          icon: (
+            <svg
+              className="animate-spin -ml-1 mr-3 h-5 w-5 text-blue-400"
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+            >
+              <circle
+                className="opacity-25"
+                cx="12"
+                cy="12"
+                r="10"
+                stroke="currentColor"
+                strokeWidth="4"
+              ></circle>
+              <path
+                className="opacity-75"
+                fill="currentColor"
+                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+              ></path>
+            </svg>
+          ),
+        };
+      case "ready":
+        return {
+          text: "Ready",
+          color: "text-green-400",
+          icon: (
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="h-5 w-5 text-green-400"
+              viewBox="0 0 20 20"
+              fill="currentColor"
+            >
+              <path
+                fillRule="evenodd"
+                d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z"
+                clipRule="evenodd"
+              />
+            </svg>
+          ),
+        };
+      case "failed":
+        return {
+          text: "Creation failed",
+          color: "text-red-400",
+          icon: (
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              className="h-5 w-5 text-red-400"
+              viewBox="0 0 20 20"
+              fill="currentColor"
+            >
+              <path
+                fillRule="evenodd"
+                d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
+                clipRule="evenodd"
+              />
+            </svg>
+          ),
+        };
+      default:
+        return {
+          text: "Unknown status",
+          color: "text-gray-400",
+          icon: null,
+        };
+    }
+  };
+
+  const renderAgentCard = (agent: Agent) => {
     const isSelected = selectedAgents.includes(agent.id);
+    const status = getStatusDisplay(agent.creation_status);
+    const isSelectable = agent.creation_status === "ready";
 
     return (
       <Card
         key={agent.id}
-        className={`bg-gray-900 border-gray-800 transition-all duration-300 cursor-pointer group
-          ${
-            isSelected
-              ? "ring-2 ring-blue-500 border-blue-500"
-              : "hover:border-gray-700"
-          }`}
-        onClick={() => handleSelectAgent(agent.id)}
+        className={`bg-gray-900 border-gray-800 transition-all duration-300 ${
+          isSelectable ? "cursor-pointer group" : "opacity-75"
+        } ${
+          isSelected
+            ? "ring-2 ring-blue-500 border-blue-500"
+            : isSelectable
+            ? "hover:border-gray-700"
+            : ""
+        }`}
+        onClick={() => isSelectable && handleSelectAgent(agent.id)}
       >
         <CardHeader className="space-y-1">
           <div className="flex items-center gap-3">
@@ -154,22 +284,20 @@ export default function AgentsPage() {
                   : "text-gray-400 group-hover:text-blue-400"
               }`}
             >
-              {agent.icon || (
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="24"
-                  height="24"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                  <circle cx="12" cy="7" r="4" />
-                </svg>
-              )}
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                <circle cx="12" cy="7" r="4" />
+              </svg>
             </div>
             <CardTitle className="text-xl text-white">{agent.name}</CardTitle>
           </div>
@@ -180,7 +308,11 @@ export default function AgentsPage() {
           </CardDescription>
           <div className="mt-6 flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
-              {isSelected && (
+              {status.icon}
+              <span className={`text-sm ${status.color}`}>{status.text}</span>
+            </div>
+            {isSelected && (
+              <div className="flex items-center gap-2">
                 <svg
                   xmlns="http://www.w3.org/2000/svg"
                   width="20"
@@ -195,19 +327,30 @@ export default function AgentsPage() {
                 >
                   <polyline points="20 6 9 17 4 12" />
                 </svg>
-              )}
-              <span
-                className={`text-sm ${
-                  isSelected ? "text-blue-400" : "text-gray-400"
-                }`}
-              >
-                {isSelected ? "Selected" : "Click to select"}
-              </span>
-            </div>
+                <span className="text-sm text-blue-400">Selected</span>
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>
     );
+  };
+
+  const allSelectedAgentsReady = () => {
+    return selectedAgents.every((agentId) => {
+      const agent = customAgents.find((a) => a.id === agentId);
+      return agent?.creation_status === "ready";
+    });
+  };
+
+  const getStartButtonText = () => {
+    if (isLoading) return "Setting up...";
+    if (!allSelectedAgentsReady()) {
+      return "Waiting for agents to be ready...";
+    }
+    return `Start Practice with ${selectedAgents.length} ${
+      selectedAgents.length === 1 ? "Persona" : "Personas"
+    }`;
   };
 
   return (
@@ -234,14 +377,14 @@ export default function AgentsPage() {
             {selectedAgents.length > 0 && (
               <Button
                 onClick={handleStartPractice}
-                className="bg-green-600 hover:bg-green-700 transition-colors"
-                disabled={isLoading}
+                className={`transition-colors ${
+                  allSelectedAgentsReady()
+                    ? "bg-green-600 hover:bg-green-700"
+                    : "bg-gray-600 cursor-not-allowed"
+                }`}
+                disabled={isLoading || !allSelectedAgentsReady()}
               >
-                {isLoading
-                  ? "Setting up..."
-                  : `Start Practice with ${selectedAgents.length} ${
-                      selectedAgents.length === 1 ? "Persona" : "Personas"
-                    }`}
+                {getStartButtonText()}
               </Button>
             )}
           </div>
