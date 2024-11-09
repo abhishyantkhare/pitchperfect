@@ -96,7 +96,7 @@ export default function AgentsPage() {
       const data = await response.json();
       if (data.success) {
         // TODO: Navigate to practice session
-        router.push(`/practice/${presentationId}`);
+        router.push(`/present/${presentationId}`);
       }
     } catch (error) {
       console.error("Error setting up practice:", error);
