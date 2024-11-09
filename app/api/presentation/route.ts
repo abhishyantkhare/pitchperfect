@@ -5,11 +5,22 @@ export async function POST(request: Request) {
   try {
     const formData = await request.formData();
     const files = formData.getAll('files') as File[];
+    const topic = formData.get('topic') as string;
     
+    if (!topic) {
+      return NextResponse.json({ error: 'Topic is required' }, { status: 400 });
+    }
+
     const supabase = await createClient();
 
-    // Insert a new row with just the UUID (which Supabase will generate automatically)
-    const { data, error } = await supabase.from('presentations').insert({}).select().single();
+    // Insert a new row with the topic
+    const { data, error } = await supabase
+      .from('presentations')
+      .insert({
+        topic
+      })
+      .select()
+      .single();
     
     if (error) {
       console.error('Error creating presentation:', error);

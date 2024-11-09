@@ -5,6 +5,7 @@ import { useRef, useState } from "react";
 export default function Home() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
+  const [topic, setTopic] = useState("");
 
   const handleUploadClick = () => {
     fileInputRef.current?.click();
@@ -29,7 +30,13 @@ export default function Home() {
   };
 
   const handleCreatePresentation = async () => {
+    if (!topic.trim()) {
+      // You might want to show an error message to the user here
+      return;
+    }
+
     const formData = new FormData();
+    formData.append("topic", topic);
     uploadedFiles.forEach((file) => {
       formData.append("files", file);
     });
@@ -58,6 +65,8 @@ export default function Home() {
               type="text"
               className="w-full border border-gray-600 rounded-md p-3 bg-gray-800 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="Type your practice topic here..."
+              value={topic}
+              onChange={(e) => setTopic(e.target.value)}
             />
             <Button
               className="bg-blue-600 hover:bg-blue-700 transition-colors p-6"
