@@ -97,7 +97,7 @@ export default function Home() {
           <div className="flex flex-col gap-3">
             <Button
               onClick={handleUploadClick}
-              className="flex items-center gap-2 px-4 py-2 text-sm border border-gray-600 rounded-md bg-gray-800 transition-colors self-start hover:bg-gray-700"
+              className="flex items-center gap-2 px-4 py-2 text-sm border border-gray-600 rounded-md transition-colors self-start hover:bg-gray-700"
             >
               <svg
                 xmlns="http://www.w3.org/2000/svg"
