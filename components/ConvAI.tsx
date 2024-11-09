@@ -7,6 +7,7 @@ import { Conversation } from "@11labs/client";
 import { useState, useEffect } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Mic, Video, PhoneOff } from "lucide-react";
+import { useParams } from "next/navigation";
 
 async function requestMicrophonePermission() {
   try {
@@ -27,17 +28,25 @@ async function getSignedUrl(): Promise<string> {
   return data.signedUrl;
 }
 
-// Define a type for the participant
-type Participant = {
-  id: number;
-  name: string;
-  avatar: string;
-  agentId: string;
+// Define a type for the agents table
+type Agent = {
+  id: string; // uuid
+  created_at: string; // timestamp with time zone
+  name: string | null;
+  persona: string | null;
+  knowledge: any | null; // json
+  image: string | null;
+  updated_at: string | null; // timestamp without time zone
+  elevenlabs_id: string | null;
+  voice_description: string | null;
+  elevenlabs_voice_id: string | null;
+  creation_status: string | null;
+  system_prompt: string | null;
 };
 
 let updateQueue: (() => void)[] = [];
 let isProcessingQueue = false;
-let currentSpeakerId: number | null = null;
+let currentSpeakerId: string | null = null;
 
 function processQueue() {
   if (isProcessingQueue || updateQueue.length === 0) return;
@@ -63,32 +72,76 @@ function queueUpdate(updateFunction: () => void) {
 }
 
 export function ConvAI() {
-  const [participants, setParticipants] = useState<Participant[]>([
+  const { presentationId } = useParams<{ presentationId: string }>();
+  const [presentationData, setPresentationData] = useState<any>(null);
+
+  const [participants, setParticipants] = useState<Agent[]>([
     {
-      id: 1,
+      id: "1",
+      created_at: new Date().toISOString(),
       name: "John Doe",
-      avatar: "/placeholder.svg?height=40&width=40",
-      agentId: "K0PRQtUKFWGL4wTjQ1i6",
+      persona: null,
+      knowledge: null,
+      image: "/placeholder.svg?height=40&width=40",
+      updated_at: null,
+      elevenlabs_id: "K0PRQtUKFWGL4wTjQ1i6",
+      voice_description: null,
+      elevenlabs_voice_id: null,
+      creation_status: null,
+      system_prompt: null,
     },
     {
-      id: 2,
+      id: "2",
+      created_at: new Date().toISOString(),
       name: "Jane Smith",
-      avatar: "/placeholder.svg?height=40&width=40",
-      agentId: "RdcFm7gBumcTAb8zgExV",
+      persona: null,
+      knowledge: null,
+      image: "/placeholder.svg?height=40&width=40",
+      updated_at: null,
+      elevenlabs_id: "RdcFm7gBumcTAb8zgExV",
+      voice_description: null,
+      elevenlabs_voice_id: null,
+      creation_status: null,
+      system_prompt: null,
     },
-    // Add agent IDs for other participants as needed
+    // Add more agents as needed
   ]);
 
   const [sessions, setSessions] = useState<{
-    [key: number]: Conversation | null;
+    [key: string]: Conversation | null;
   }>({
-    1: null,
-    2: null,
+    "1": null,
+    "2": null,
     // Initialize other participant sessions as needed
   });
 
   const [time, setTime] = useState(0);
   const [isRunning, setIsRunning] = useState(false);
+
+  useEffect(() => {
+    console.log(`presentationId:`, presentationId);
+    if (presentationId) {
+      fetchPresentationData(presentationId);
+    }
+  }, [presentationId]);
+
+  async function fetchPresentationData(id: string) {
+    console.log(`fetchPresentationData:`, id);
+    try {
+      const response = await fetch(`/api/presentation/${id}`);
+      if (!response.ok) {
+        console.error(
+          `Failed to fetch presentation data: ${response.statusText}`
+        );
+        throw new Error("Failed to fetch presentation data");
+      }
+      const data = await response.json();
+      setPresentationData(data);
+      console.log(`presentationData:`, presentationData);
+    } catch (error) {
+      console.error("Error fetching presentation data:", error);
+    }
+  }
 
   useEffect(() => {
     if (currentSpeakerId === null) {
@@ -102,7 +155,7 @@ export function ConvAI() {
     } else {
       for (const entry of Object.entries(sessions)) {
         const [id, session] = entry;
-        if (Number(id) === currentSpeakerId) {
+        if (id === currentSpeakerId) {
           console.log(`setting volume to 0.5 for ${id}`);
           session?.setVolume({ volume: 0.5 });
         } else {
@@ -136,7 +189,7 @@ export function ConvAI() {
     switch (action) {
       case "start":
         startAllConversations();
-        currentSpeakerId = 1;
+        currentSpeakerId = "1";
         setIsRunning(true);
         break;
       case "resume":
@@ -163,7 +216,7 @@ export function ConvAI() {
     const updatedSessions = await Promise.all(
       participants.map(async (participant) => {
         const session = await Conversation.startSession({
-          agentId: participant.agentId,
+          agentId: participant.elevenlabs_id ?? "",
           onConnect: () => {
             console.log(`${participant.name} connected`);
           },
@@ -255,12 +308,15 @@ export function ConvAI() {
                 <div className="flex items-center gap-2">
                   <Avatar>
                     <AvatarImage
-                      src={participant.avatar}
-                      alt={participant.name}
+                      src={
+                        participant.image ??
+                        "/placeholder.svg?height=40&width=40"
+                      }
+                      alt={participant.name ?? ""}
                     />
                     <AvatarFallback>
                       {participant.name
-                        .split(" ")
+                        ?.split(" ")
                         .map((n) => n[0])
                         .join("")}
                     </AvatarFallback>
