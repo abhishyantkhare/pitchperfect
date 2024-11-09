@@ -11,6 +11,9 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(false);
 
   const handleUploadClick = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
     fileInputRef.current?.click();
   };
 
@@ -18,7 +21,6 @@ export default function Home() {
     const files = event.target.files;
     if (files && files.length > 0) {
       setUploadedFiles((prev) => [...prev, ...Array.from(files)]);
-      event.target.value = "";
     }
   };
 
@@ -30,6 +32,9 @@ export default function Home() {
 
   const clearAllFiles = () => {
     setUploadedFiles([]);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
   };
 
   const handleCreatePresentation = async () => {
