@@ -1,30 +1,30 @@
-'use client';
-import { useParams, useRouter } from 'next/navigation';
-import Image from 'next/image';
-import { useState, useEffect, useRef } from 'react';
+"use client";
+import Image from "next/image";
+import { useParams, useRouter } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 
-import { useGlobalContext } from '@/app/context/GlobalContext';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
+import { useGlobalContext } from "@/app/context/GlobalContext";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from '@/components/ui/tooltip';
-import { cn } from '@/lib/utils';
-import { Conversation } from '@11labs/client';
-import { Circle, Video, VideoOff } from 'lucide-react';
-import Spinner from './Spinner';
+} from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
+import { Conversation } from "@11labs/client";
+import { Circle, Video, VideoOff } from "lucide-react";
+import Spinner from "./Spinner";
 
 const avatarImages = [
-  '/avatar_1.svg',
-  '/avatar_2.svg',
-  '/avatar_3.svg',
-  '/avatar_4.svg',
-  '/avatar_5.svg',
-  '/avatar_6.svg',
+  "/avatar_1.svg",
+  "/avatar_2.svg",
+  "/avatar_3.svg",
+  "/avatar_4.svg",
+  "/avatar_5.svg",
+  "/avatar_6.svg",
   // Add more paths as needed
 ];
 
@@ -39,15 +39,15 @@ async function requestMicrophonePermission() {
     await navigator.mediaDevices.getUserMedia({ audio: true });
     return true;
   } catch {
-    console.error('Microphone permission denied');
+    console.error("Microphone permission denied");
     return false;
   }
 }
 
 async function getSignedUrl(): Promise<string> {
-  const response = await fetch('/api/signed-url');
+  const response = await fetch("/api/signed-url");
   if (!response.ok) {
-    throw Error('Failed to get signed url');
+    throw Error("Failed to get signed url");
   }
   const data = await response.json();
   return data.signedUrl;
@@ -132,8 +132,8 @@ export function ConvAI() {
   const [isRunning, setIsRunning] = useState(false);
 
   const [recordingStatus, setRecordingStatus] = useState<
-    'notStarted' | 'recording' | 'paused' | 'finished' | 'processing'
-  >('notStarted');
+    "notStarted" | "recording" | "paused" | "finished" | "processing"
+  >("notStarted");
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
@@ -141,8 +141,13 @@ export function ConvAI() {
 
   const [timestamps, setTimestamps] = useState<Timestamp[]>([]);
 
+  const [audioRecorder, setAudioRecorder] = useState<MediaRecorder | null>(
+    null
+  );
+  const [recordedChunks, setRecordedChunks] = useState<Blob[]>([]);
+
   useEffect(() => {
-    console.log('timestamps: ', timestamps);
+    console.log("timestamps: ", timestamps);
   }, [timestamps]);
 
   const conversationIds: string[] = [];
@@ -153,26 +158,26 @@ export function ConvAI() {
         // Turn off the video
         const stream = videoRef.current.srcObject as MediaStream | null;
         if (stream) {
-          console.log('Stopping video tracks');
+          console.log("Stopping video tracks");
           stream.getVideoTracks().forEach((track) => track.stop());
           videoRef.current.srcObject = null;
         }
       } else {
         // Turn on the video
         try {
-          console.log('Requesting video stream');
+          console.log("Requesting video stream");
           const stream = await navigator.mediaDevices.getUserMedia({
             video: true,
             audio: false, // No audio
           });
-          console.log('Video stream obtained', stream);
+          console.log("Video stream obtained", stream);
           videoRef.current.srcObject = stream;
         } catch (error) {
-          console.error('Error accessing camera:', error);
+          console.error("Error accessing camera:", error);
         }
       }
     } else {
-      console.error('Video element reference is null');
+      console.error("Video element reference is null");
     }
     setIsVideoOn((prev) => !prev);
   };
@@ -190,7 +195,7 @@ export function ConvAI() {
     const agents = await fetchPresentationData(id);
     console.log(`agents:`, agents);
     if (!agents) {
-      console.error('could not fetch and prepare agents');
+      console.error("could not fetch and prepare agents");
       return;
     }
     await updateAgentsWithIntent(id, intent, agents);
@@ -214,13 +219,30 @@ export function ConvAI() {
   }
 
   async function getHighlights() {
-    await fetch(`/api/presentation/${presentationId}/recording`, {
-      method: 'POST',
-      body: JSON.stringify({
-        conversationIds: conversationIds,
-        timestamps: timestamps,
-      }),
-    });
+    try {
+      const audioBlob = new Blob(recordedChunks, { type: "audio/mp3" });
+      const formData = new FormData();
+      formData.append("audio", audioBlob, "recording.mp3");
+
+      const response = await fetch(
+        `/api/presentation/${presentationId}/recording`,
+        {
+          method: "POST",
+          // Don't set Content-Type header - browser will set it automatically
+          body: formData,
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(`Failed to get highlights: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      console.log("Highlights data:", data);
+      return data;
+    } catch (error) {
+      console.error("Error getting highlights:", error);
+    }
   }
 
   async function updateAgentsWithIntent(
@@ -241,14 +263,14 @@ export function ConvAI() {
             presentationId: id,
           };
           const response = await fetch(`/api/agents/setup-voice`, {
-            method: 'PATCH',
+            method: "PATCH",
             body: JSON.stringify(body),
           });
           if (!response.ok) {
             console.error(
               `Failed to update agents with intent: ${response.statusText}`
             );
-            throw new Error('Failed to update agents with intent');
+            throw new Error("Failed to update agents with intent");
           }
           const result = await response.json();
           console.log(`updateAgentsWithIntent::result:`, result);
@@ -267,13 +289,13 @@ export function ConvAI() {
         console.error(
           `Failed to fetch presentation data: ${response.statusText}`
         );
-        throw new Error('Failed to fetch presentation data');
+        throw new Error("Failed to fetch presentation data");
       }
       const agents = (await response.json()) as Agent[];
       console.log(`agents:`, agents);
       return agents;
     } catch (error) {
-      console.error('Error fetching presentation data:', error);
+      console.error("Error fetching presentation data:", error);
     }
   }
 
@@ -322,7 +344,7 @@ export function ConvAI() {
           videoRef.current.srcObject = stream;
         }
       } catch (error) {
-        console.error('Error accessing camera:', error);
+        console.error("Error accessing camera:", error);
       }
     }
 
@@ -351,7 +373,7 @@ export function ConvAI() {
             end: currTime,
             conversation_id: previousSpeakerId
               ? sessions[previousSpeakerId]?.getId() ?? null
-              : 'user',
+              : "user",
           },
         ]);
       } else {
@@ -363,7 +385,7 @@ export function ConvAI() {
             end: currTime,
             conversation_id: previousSpeakerId
               ? sessions[previousSpeakerId]?.getId() ?? null
-              : 'user',
+              : "user",
           },
         ]);
       }
@@ -376,53 +398,88 @@ export function ConvAI() {
     const minutes = Math.floor((seconds % 3600) / 60);
     const secs = Math.floor(seconds % 60);
     const tenths = Math.floor((seconds * 10) % 10); // Calculate tenths of a second
-    return `${hours.toString().padStart(2, '0')}:${minutes
+    return `${hours.toString().padStart(2, "0")}:${minutes
       .toString()
-      .padStart(2, '0')}:${secs.toString().padStart(2, '0')}.${tenths}`;
+      .padStart(2, "0")}:${secs.toString().padStart(2, "0")}.${tenths}`;
   };
 
   const handleCommand = async (action: string) => {
     switch (action) {
-      case 'start':
+      case "start":
         startAllConversations();
         setIsRunning(true);
-        setRecordingStatus('recording');
+        setRecordingStatus("recording");
+        startRecording();
         break;
-      case 'resume':
+      case "resume":
         setIsRunning(true);
         currentSpeakerId = null;
-        setRecordingStatus('recording');
+        setRecordingStatus("recording");
+        startRecording();
         break;
-      case 'pause':
+      case "pause":
         setIsRunning(false);
         currentSpeakerId = null;
-        setRecordingStatus('paused');
+        setRecordingStatus("paused");
+        stopRecording();
         break;
-      case 'finish':
+      case "finish":
         setIsRunning(false);
         currentSpeakerId = null;
         await endConversation();
-        setRecordingStatus('finished');
-        break;
-      case 'process':
-        setRecordingStatus('processing');
+        setRecordingStatus("finished");
+        await uploadFinalRecording();
         await getHighlights();
         router.push(`/highlights/${presentationId}`);
         break;
+      case "process":
+        setRecordingStatus("processing");
+        break;
+    }
+  };
+
+  const uploadFinalRecording = async () => {
+    try {
+      // Create a single blob from all recorded chunks
+      const audioBlob = new Blob(recordedChunks, { type: "audio/mp3" });
+      const formData = new FormData();
+      formData.append("audio", audioBlob, "recording.mp3");
+
+      // Upload the complete recording
+      const response = await fetch(
+        `/api/presentation/${presentationId}/recording`,
+        {
+          method: "POST",
+          body: formData,
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to upload recording");
+      }
+
+      const data = await response.json();
+      console.log("Recording uploaded and analyzed:", data);
+
+      // Clear the recorded chunks after successful upload
+      setRecordedChunks([]);
+    } catch (error) {
+      console.error("Error uploading final recording:", error);
     }
   };
 
   async function startAllConversations() {
     const hasPermission = await requestMicrophonePermission();
     if (!hasPermission) {
-      alert('No permission');
+      alert("Microphone permission is required");
       return;
     }
 
     const updatedSessions = await Promise.all(
       participants.map(async (participant) => {
+        console.log(`Starting session for ${participant.name}`);
         const session = await Conversation.startSession({
-          agentId: participant.elevenlabs_id ?? '',
+          agentId: participant.elevenlabs_id ?? "",
           onConnect: () => {
             console.log(`${participant.name} connected`);
           },
@@ -431,10 +488,10 @@ export function ConvAI() {
           },
           onError: (error) => {
             console.log(error);
-            alert('An error occurred during the conversation');
+            alert("An error occurred during the conversation");
           },
           onModeChange: ({ mode }) => {
-            if (mode === 'speaking') {
+            if (mode === "speaking") {
               if (currentSpeakerId === null) {
                 // Only hold the conch if there are no agents in the cycle or the current agent is not the one with the most turns
                 if (
@@ -446,13 +503,16 @@ export function ConvAI() {
                   agentSpeakingCycle.push(participant.id);
                 }
               }
-            } else {
+            } else if (mode === "listening") {
+              console.log(`${participant.name} stopped speaking`);
               if (currentSpeakerId === participant.id) {
                 currentSpeakerId = null;
+                startRecording();
               }
             }
           },
         });
+
         const sessionId = await session.getId();
         conversationIds.push(sessionId);
         if (participant.id === currentSpeakerId) {
@@ -508,6 +568,127 @@ export function ConvAI() {
     );
   }
 
+  useEffect(() => {
+    initializeAudioRecording();
+  }, []);
+
+  const initializeAudioRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          sampleRate: 16000,
+        },
+      });
+
+      // Check supported MIME types
+      const mimeTypes = [
+        "audio/webm",
+        "audio/webm;codecs=opus",
+        "audio/ogg;codecs=opus",
+      ];
+
+      const supportedType = mimeTypes.find((type) =>
+        MediaRecorder.isTypeSupported(type)
+      );
+
+      if (!supportedType) {
+        throw new Error("No supported audio MIME type found");
+      }
+
+      console.log("Using MIME type:", supportedType);
+
+      const recorder = new MediaRecorder(stream, {
+        mimeType: supportedType,
+        audioBitsPerSecond: 128000,
+      });
+
+      recorder.ondataavailable = (event) => {
+        console.log("Data available:", event.data.size);
+        if (event.data.size > 0) {
+          setRecordedChunks((prev) => [...prev, event.data]);
+        }
+      };
+
+      setAudioRecorder(recorder);
+    } catch (error) {
+      console.error("Error initializing audio recording:", error);
+    }
+  };
+
+  const startRecording = () => {
+    console.log("Starting recording...");
+    if (audioRecorder && audioRecorder.state === "inactive") {
+      setRecordedChunks([]);
+      try {
+        audioRecorder.start(1000); // Record in 1-second chunks
+        console.log("Recording started");
+      } catch (error) {
+        console.error("Error starting recording:", error);
+      }
+    }
+  };
+
+  const stopRecording = async () => {
+    console.log("Stopping recording...");
+    if (audioRecorder && audioRecorder.state === "recording") {
+      try {
+        // Register the dataavailable event handler before stopping
+        audioRecorder.addEventListener(
+          "dataavailable",
+          async (event) => {
+            console.log("Final chunk size:", event.data.size);
+            if (event.data.size > 0) {
+              const chunks = [...recordedChunks, event.data];
+              console.log("Total chunks:", chunks.length);
+
+              const audioBlob = new Blob(chunks, {
+                type: audioRecorder.mimeType,
+              });
+              console.log("Final blob size:", audioBlob.size);
+
+              const formData = new FormData();
+              formData.append(
+                "audio",
+                audioBlob,
+                `recording.${
+                  audioRecorder.mimeType.split(";")[0].split("/")[1]
+                }`
+              );
+
+              try {
+                const response = await fetch(
+                  `/api/presentation/${presentationId}/recording`,
+                  {
+                    method: "POST",
+                    body: formData,
+                  }
+                );
+
+                if (!response.ok) {
+                  throw new Error("Failed to upload recording");
+                }
+
+                const data = await response.json();
+                console.log("Recording uploaded successfully:", data);
+              } catch (error) {
+                console.error("Error uploading recording:", error);
+              }
+            }
+            setRecordedChunks([]);
+          },
+          { once: true }
+        ); // Remove the event listener after it fires once
+
+        audioRecorder.stop();
+        console.log("Recording stopped");
+      } catch (error) {
+        console.error("Error stopping recording:", error);
+      }
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-background text-foreground flex flex-col dark">
@@ -523,14 +704,14 @@ export function ConvAI() {
       <main className="flex flex-grow p-4 overflow-auto h-full items-center justify-center">
         <div
           className="flex gap-4 justify-center items-center h-full flex-wrap  flex-grow"
-          style={{ height: '100%' }}
+          style={{ height: "100%" }}
         >
           {participants.map((participant, index) => (
             <Card
               key={participant.id}
               className={cn(
-                'bg-card text-card-foreground max-w-[80vw] flex-1',
-                participant.id === currentSpeakerId ? 'border-blue-500' : ''
+                "bg-card text-card-foreground max-w-[80vw] flex-1",
+                participant.id === currentSpeakerId ? "border-blue-500" : ""
               )}
             >
               <CardContent className="p-4">
@@ -547,17 +728,17 @@ export function ConvAI() {
                     <AvatarImage
                       src={
                         participant.image ??
-                        '/placeholder.svg?height=40&width=40'
+                        "/placeholder.svg?height=40&width=40"
                       }
-                      alt={participant.name ?? ''}
+                      alt={participant.name ?? ""}
                       className="w-full h-full object-cover"
                     />
                     <AvatarFallback>
                       {participant.name
-                        ?.replace(/\s*\(.*?\)\s*/g, '')
-                        .split(' ')
+                        ?.replace(/\s*\(.*?\)\s*/g, "")
+                        .split(" ")
                         .map((n) => n[0])
-                        .join('')}
+                        .join("")}
                     </AvatarFallback>
                   </Avatar>
                   <span className="font-medium">{participant.name}</span>
@@ -613,15 +794,15 @@ export function ConvAI() {
               <div className="text-2xl font-bold mb-2">{formatTime(time)}</div>
               <div
                 className={cn(
-                  'flex items-center rounded-full px-2 py-1',
-                  recordingStatus === 'notStarted' && 'bg-gray-500',
-                  recordingStatus === 'recording' && 'bg-red-500 bg-opacity-75',
-                  recordingStatus === 'paused' && 'bg-blue-500',
-                  recordingStatus === 'finished' && 'bg-green-500',
-                  recordingStatus === 'processing' && 'bg-emerald-800'
+                  "flex items-center rounded-full px-2 py-1",
+                  recordingStatus === "notStarted" && "bg-gray-500",
+                  recordingStatus === "recording" && "bg-red-500 bg-opacity-75",
+                  recordingStatus === "paused" && "bg-blue-500",
+                  recordingStatus === "finished" && "bg-green-500",
+                  recordingStatus === "processing" && "bg-emerald-800"
                 )}
               >
-                {recordingStatus === 'processing' ? (
+                {recordingStatus === "processing" ? (
                   <div className="flex items-center h-4 w-4">
                     <Spinner className=" text-white animate-spin mr-1" />
                   </div>
@@ -629,52 +810,52 @@ export function ConvAI() {
                   <Circle className="h-3 w-3 text-white animate-pulse mr-1" />
                 )}
                 <span className="text-white text-xs font-medium">
-                  {recordingStatus === 'notStarted' && 'NOT STARTED'}
-                  {recordingStatus === 'recording' && 'RECORDING'}
-                  {recordingStatus === 'paused' && 'PAUSED'}
-                  {recordingStatus === 'finished' && 'FINISHED'}
-                  {recordingStatus === 'processing' && 'PROCESSING'}
+                  {recordingStatus === "notStarted" && "NOT STARTED"}
+                  {recordingStatus === "recording" && "RECORDING"}
+                  {recordingStatus === "paused" && "PAUSED"}
+                  {recordingStatus === "finished" && "FINISHED"}
+                  {recordingStatus === "processing" && "PROCESSING"}
                 </span>
               </div>
             </div>
 
             <div>
               <Button
-                onClick={() => handleCommand('start')}
+                onClick={() => handleCommand("start")}
                 className="m-1"
-                disabled={recordingStatus !== 'notStarted'}
+                disabled={recordingStatus !== "notStarted"}
               >
                 Start
               </Button>
               <Button
-                onClick={() => handleCommand('pause')}
+                onClick={() => handleCommand("pause")}
                 className="m-1"
-                disabled={recordingStatus !== 'recording'}
+                disabled={recordingStatus !== "recording"}
               >
                 Pause
               </Button>
               <Button
-                onClick={() => handleCommand('resume')}
+                onClick={() => handleCommand("resume")}
                 className="m-1"
-                disabled={recordingStatus !== 'paused'}
+                disabled={recordingStatus !== "paused"}
               >
                 Resume
               </Button>
-              {recordingStatus === 'finished' ? (
+              {recordingStatus === "finished" ? (
                 <Button
-                  onClick={() => handleCommand('process')}
+                  onClick={() => handleCommand("process")}
                   className="m-1 bg-emerald-700 text-white hover:text-black hover:bg-emerald-200"
-                  disabled={recordingStatus !== 'finished'}
+                  disabled={recordingStatus !== "finished"}
                 >
                   Process
                 </Button>
               ) : (
                 <Button
-                  onClick={() => handleCommand('finish')}
+                  onClick={() => handleCommand("finish")}
                   className="m-1 "
                   disabled={
-                    recordingStatus !== 'recording' &&
-                    recordingStatus !== 'paused'
+                    recordingStatus !== "recording" &&
+                    recordingStatus !== "paused"
                   }
                 >
                   Finish
@@ -683,7 +864,7 @@ export function ConvAI() {
             </div>
           </CardContent>
         </Card>
-      </div>{' '}
+      </div>{" "}
     </div>
   );
 }
