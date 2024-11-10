@@ -1,5 +1,6 @@
 "use client";
 import { useParams } from "next/navigation";
+import Image from "next/image";
 import { useState, useEffect, useRef } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -16,6 +17,22 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import Spinner from "./Spinner";
+
+const avatarImages = [
+  "/avatar_1.svg",
+  "/avatar_2.svg",
+  "/avatar_3.svg",
+  "/avatar_4.svg",
+  "/avatar_5.svg",
+  "/avatar_6.svg",
+  // Add more paths as needed
+];
+
+// Function to get a random avatar image path
+const getRandomAvatar = () => {
+  const randomIndex = Math.floor(Math.random() * avatarImages.length);
+  return avatarImages[randomIndex];
+};
 
 async function requestMicrophonePermission() {
   try {
@@ -464,19 +481,27 @@ export function ConvAI() {
     <div className="min-h-screen bg-background text-foreground flex flex-col dark">
       <main className="flex flex-grow p-4 overflow-auto  h-full items-center justify-center">
         <div
-          className="flex flex-wrap gap-4 justify-center items-center h-full"
+          className="flex gap-4 justify-center items-center h-full"
           style={{ height: "100%" }}
         >
           {participants.map((participant) => (
             <Card
               key={participant.id}
               className={cn(
-                "bg-card text-card-foreground min-w-[200px] sm:min-w-[300px] md:min-w-[500px]",
+                "bg-card text-card-foreground min-w-[200px] sm:min-w-[300px] md:min-w-[500px] w-[50%] h-[50%]",
                 participant.id === currentSpeakerId ? "border-blue-500" : ""
               )}
             >
               <CardContent className="p-4">
-                <div className="aspect-video bg-muted rounded-lg mb-2"></div>
+                <div className="aspect-video bg-muted rounded-lg flex justify-center items-center mb-2">
+                  <Image
+                    src={getRandomAvatar()}
+                    alt="avatar"
+                    width={100}
+                    height={100}
+                    className="w-[75%] h-[50%]"
+                  />
+</div>
                 <div className="flex items-center gap-2">
                   <Avatar>
                     <AvatarImage
@@ -485,6 +510,7 @@ export function ConvAI() {
                         "/placeholder.svg?height=40&width=40"
                       }
                       alt={participant.name ?? ""}
+                      className="w-full h-full object-cover"
                     />
                     <AvatarFallback>
                       {participant.name
