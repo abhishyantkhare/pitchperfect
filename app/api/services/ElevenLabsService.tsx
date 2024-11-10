@@ -179,10 +179,10 @@ export class ElevenLabsService {
       };
 
       const formData = new FormData();
-      formData.append('agent_id', agentId);
-      formData.append('name', name);
-      formData.append('url', url);
-    //   https://api.us.elevenlabs.io/v1/convai/agents/11FIonUWMlKlxrnN6p9i/add-to-knowledge-base
+      formData.append("agent_id", agentId);
+      formData.append("name", name);
+      formData.append("url", url);
+      
       const response = await fetch(
         `${this.BASE_URL}/convai/agents/${agentId}/add-to-knowledge-base`,
         {

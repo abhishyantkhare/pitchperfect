@@ -7,7 +7,6 @@ import {
   elevenLabsSystemPromptWithIntent,
   getPresentationPreSignedUrls,
 } from "./utils";
-import { SupabaseClient } from "@supabase/supabase-js";
 
 export async function POST(request: Request) {
   try {
