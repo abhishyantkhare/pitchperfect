@@ -1,3 +1,5 @@
+import { SupabaseClient } from "@supabase/supabase-js";
+
 export const elevenLabsSystemPrompt = (
     persona: string
   ) => `You are a member of the audience for a presentation. 
@@ -23,4 +25,53 @@ export const elevenLabsSystemPrompt = (
     systemPrompt: string,
     intent: string
   ) => `${systemPrompt}<intent>${intent}</intent>`;
+  
+
+  // Supabase Utils
+  export async function getPresentationPreSignedUrls(
+    supabase: SupabaseClient,
+    presentationId: string,
+    bucketName: string
+  ) {
+    const fileNamesToIgnore = ["recording.mp3", "recording.wav"];
+
+    const expiryTime = 3600; // Expiry time in seconds (1 hour)
+  
+    const bucketFolderPath = presentationId;
+    // List files in the specified bucket
+    const { data: files, error: listError } = await supabase.storage
+      .from(bucketName)
+      .list(bucketFolderPath);
+    if (listError) {
+      console.error("Error listing files:", listError);
+      return;
+    }
+    const filteredFiles = files.filter((file) => !fileNamesToIgnore.includes(file.name));
+    console.log(
+      "getPresentationPreSignedUrls::supabaseObjectStore:files",
+      filteredFiles
+    );
+
+    // Generate pre-signed URLs for each file
+    const preSignedUrls = await Promise.all(
+      filteredFiles.map(async (file) => {
+        const bucketFilePath = `${bucketFolderPath}/${file.name}`;
+        const { data: signedUrlData, error: urlError } = await supabase.storage
+          .from(bucketName)
+          .createSignedUrl(bucketFilePath, expiryTime);
+  
+        if (urlError) {
+          console.error(`Error creating signed URL for ${file.name}:`, urlError);
+          return null;
+        }
+  
+        return { fileName: file.name, signedUrl: signedUrlData.signedUrl };
+      })
+    );
+  
+    // Filter out any null results due to errors
+    const signedUrls = preSignedUrls.map((url) => url?.signedUrl);
+    const cleanSignedUrls = signedUrls.filter((url) => url !== null);
+    return cleanSignedUrls;
+  }
   
