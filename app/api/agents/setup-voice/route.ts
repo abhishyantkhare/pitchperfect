@@ -26,7 +26,7 @@ export async function POST(request: Request) {
       {
         method: "POST",
         headers: {
-          "xi-api-key": `${process.env.XI_API_KEY}`,
+          "xi-api-key": `${process.env.ELEVENLABS_API_KEY}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify(voiceRequest),
@@ -63,7 +63,7 @@ export async function POST(request: Request) {
       {
         method: "POST",
         headers: {
-          "xi-api-key": `${process.env.XI_API_KEY}`,
+          "xi-api-key": `${process.env.ELEVENLABS_API_KEY}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify(elevenLabsAddVoiceRequest),
@@ -150,7 +150,7 @@ export async function POST(request: Request) {
       {
         method: "POST",
         headers: {
-          "xi-api-key": `${process.env.XI_API_KEY}`,
+          "xi-api-key": `${process.env.ELEVENLABS_API_KEY}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify(elevenLabsRequest),
@@ -364,6 +364,7 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Error in PATCH /api/agents/setup-voice:", error);
+
 
     return NextResponse.json(
       { error: "Internal server error" },

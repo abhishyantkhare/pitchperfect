@@ -7,6 +7,7 @@ import { Conversation } from "@11labs/client";
 import { useState, useEffect } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Mic, Video, PhoneOff } from "lucide-react";
+import { useParams } from "next/navigation";
 
 async function requestMicrophonePermission() {
   try {
@@ -27,48 +28,142 @@ async function getSignedUrl(): Promise<string> {
   return data.signedUrl;
 }
 
-// Define a type for the participant
-type Participant = {
-  id: number;
-  name: string;
-  avatar: string;
-  speaking: boolean;
-  agentId: string;
-  session: Conversation | null; // Ensure session is of type Conversation or null
+// Define a type for the agents table
+type Agent = {
+  id: string; // uuid
+  created_at: string; // timestamp with time zone
+  name: string | null;
+  persona: string | null;
+  knowledge: any | null; // json
+  image: string | null;
+  updated_at: string | null; // timestamp without time zone
+  elevenlabs_id: string | null;
+  voice_description: string | null;
+  elevenlabs_voice_id: string | null;
+  creation_status: string | null;
+  system_prompt: string | null;
 };
 
+let updateQueue: (() => void)[] = [];
+let isProcessingQueue = false;
+let currentSpeakerId: string | null = null;
+
+function processQueue() {
+  if (isProcessingQueue || updateQueue.length === 0) return;
+  isProcessingQueue = true;
+
+  const updateFunction = updateQueue.shift();
+  if (updateFunction) {
+    updateFunction();
+  }
+
+  isProcessingQueue = false;
+
+  if (updateQueue.length > 0) {
+    setTimeout(processQueue, 0); // Schedule the next queue processing
+  }
+}
+
+function queueUpdate(updateFunction: () => void) {
+  updateQueue.push(updateFunction);
+  if (!isProcessingQueue) {
+    processQueue();
+  }
+}
+
 export function ConvAI() {
-  const [conversation, setConversation] = useState<Conversation | null>(null);
-  const [conversation2, setConversation2] = useState<Conversation | null>(null);
-  const [isConnected, setIsConnected] = useState(false);
-  const [isSpeaking, setIsSpeaking] = useState(false);
-  const [isConnected2, setIsConnected2] = useState(false);
-  const [isSpeaking2, setIsSpeaking2] = useState(false);
-  const [currentSpeakerId, setCurrentSpeakerId] = useState<number | null>(null);
-  const [participants, setParticipants] = useState<Participant[]>([
+  const { presentationId } = useParams<{ presentationId: string }>();
+  const [presentationData, setPresentationData] = useState<any>(null);
+
+  const [participants, setParticipants] = useState<Agent[]>([
     {
-      id: 1,
+      id: "1",
+      created_at: new Date().toISOString(),
       name: "John Doe",
-      avatar: "/placeholder.svg?height=40&width=40",
-      speaking: false,
-      agentId: "K0PRQtUKFWGL4wTjQ1i6",
-      session: null,
+      persona: null,
+      knowledge: null,
+      image: "/placeholder.svg?height=40&width=40",
+      updated_at: null,
+      elevenlabs_id: "K0PRQtUKFWGL4wTjQ1i6",
+      voice_description: null,
+      elevenlabs_voice_id: null,
+      creation_status: null,
+      system_prompt: null,
     },
     {
-      id: 2,
+      id: "2",
+      created_at: new Date().toISOString(),
       name: "Jane Smith",
-      avatar: "/placeholder.svg?height=40&width=40",
-      speaking: false,
-      agentId: "RdcFm7gBumcTAb8zgExV",
-      session: null,
+      persona: null,
+      knowledge: null,
+      image: "/placeholder.svg?height=40&width=40",
+      updated_at: null,
+      elevenlabs_id: "RdcFm7gBumcTAb8zgExV",
+      voice_description: null,
+      elevenlabs_voice_id: null,
+      creation_status: null,
+      system_prompt: null,
     },
-    // Add agent IDs for other participants as needed
+    // Add more agents as needed
   ]);
+
+  const [sessions, setSessions] = useState<{
+    [key: string]: Conversation | null;
+  }>({
+    "1": null,
+    "2": null,
+    // Initialize other participant sessions as needed
+  });
+
   const [time, setTime] = useState(0);
   const [isRunning, setIsRunning] = useState(false);
 
   useEffect(() => {
-    console.log(`currentSpeakerId: ${currentSpeakerId}`);
+    console.log(`presentationId:`, presentationId);
+    if (presentationId) {
+      fetchPresentationData(presentationId);
+    }
+  }, [presentationId]);
+
+  async function fetchPresentationData(id: string) {
+    console.log(`fetchPresentationData:`, id);
+    try {
+      const response = await fetch(`/api/presentation/${id}`);
+      if (!response.ok) {
+        console.error(
+          `Failed to fetch presentation data: ${response.statusText}`
+        );
+        throw new Error("Failed to fetch presentation data");
+      }
+      const data = await response.json();
+      setPresentationData(data);
+      console.log(`presentationData:`, presentationData);
+    } catch (error) {
+      console.error("Error fetching presentation data:", error);
+    }
+  }
+
+  useEffect(() => {
+    if (currentSpeakerId === null) {
+      for (const entry of Object.entries(sessions)) {
+        const [id, session] = entry;
+        if (session) {
+          console.log(`setting volume to 0 for ${id}`);
+          session.setVolume({ volume: 0 });
+        }
+      }
+    } else {
+      for (const entry of Object.entries(sessions)) {
+        const [id, session] = entry;
+        if (id === currentSpeakerId) {
+          console.log(`setting volume to 0.5 for ${id}`);
+          session?.setVolume({ volume: 0.5 });
+        } else {
+          console.log(`setting volume to 0 for ${id}`);
+          session?.setVolume({ volume: 0 });
+        }
+      }
+    }
   }, [currentSpeakerId]);
 
   useEffect(() => {
@@ -94,6 +189,7 @@ export function ConvAI() {
     switch (action) {
       case "start":
         startAllConversations();
+        currentSpeakerId = "1";
         setIsRunning(true);
         break;
       case "resume":
@@ -104,6 +200,7 @@ export function ConvAI() {
         break;
       case "finish":
         setIsRunning(false);
+        currentSpeakerId = null;
         endConversation();
         break;
     }
@@ -116,50 +213,48 @@ export function ConvAI() {
       return;
     }
 
-    const updatedParticipants = await Promise.all(
+    const updatedSessions = await Promise.all(
       participants.map(async (participant) => {
         const session = await Conversation.startSession({
-          agentId: participant.agentId,
+          agentId: participant.elevenlabs_id ?? "",
           onConnect: () => {
-            setIsConnected(true);
+            console.log(`${participant.name} connected`);
           },
           onDisconnect: () => {
-            setIsConnected(false);
-            setIsSpeaking(false);
+            console.log(`${participant.name} disconnected`);
           },
           onError: (error) => {
             console.log(error);
             alert("An error occurred during the conversation");
           },
           onModeChange: ({ mode }) => {
-            setParticipants((prevParticipants) =>
-              prevParticipants.map((p) => {
-                console.log(`onModeChange: ${p.id} ${mode}`);
-                if (p.id === participant.id) {
-                  if (mode === "speaking") {
-                    if (currentSpeakerId === null) {
-                      setCurrentSpeakerId(p.id);
-                      p.session?.setVolume({ volume: 0.5 });
-                      return { ...p, speaking: true, volume: 0.5 };
-                    }
-                  } else if (mode === "listening") {
-                    if (currentSpeakerId === p.id) {
-                      setCurrentSpeakerId(null);
-                      p.session?.setVolume({ volume: 0 });
-                      return { ...p, speaking: false, volume: 0 };
-                    }
-                  }
-                }
-                return p;
-              })
-            );
+            if (mode === "speaking") {
+              if (currentSpeakerId === null) {
+                currentSpeakerId = participant.id;
+              }
+            } else {
+              if (currentSpeakerId === participant.id) {
+                currentSpeakerId = null;
+              }
+            }
           },
         });
-        return { ...participant, session };
+        if (participant.id === currentSpeakerId) {
+          session.setVolume({ volume: 0.5 });
+        } else {
+          session.setVolume({ volume: 0 });
+        }
+        return { id: participant.id, session };
       })
     );
 
-    setParticipants(updatedParticipants);
+    setSessions((prevSessions) => {
+      const newSessions = { ...prevSessions };
+      updatedSessions.forEach(({ id, session }) => {
+        newSessions[id] = session;
+      });
+      return newSessions;
+    });
   }
 
   function randomlySelectAgentToSpeak() {
@@ -174,14 +269,20 @@ export function ConvAI() {
 
   async function endConversation() {
     for (const participant of participants) {
-      if (participant.session) {
-        await participant.session.endSession();
+      const session = sessions[participant.id];
+      if (session) {
+        await session.endSession();
       }
     }
+    setSessions((prevSessions) =>
+      Object.keys(prevSessions).reduce((acc, key) => {
+        acc[Number(key)] = null;
+        return acc;
+      }, {} as { [key: number]: Conversation | null })
+    );
     setParticipants((prevParticipants) =>
       prevParticipants.map((participant) => ({
         ...participant,
-        session: null,
         speaking: false,
       }))
     );
@@ -199,7 +300,7 @@ export function ConvAI() {
               key={participant.id}
               className={cn(
                 "bg-card text-card-foreground min-w-[200px] sm:min-w-[300px] md:min-w-[500px]",
-                participant.speaking ? "border-blue-500" : ""
+                participant.id === currentSpeakerId ? "border-blue-500" : ""
               )}
             >
               <CardContent className="p-4">
@@ -207,12 +308,15 @@ export function ConvAI() {
                 <div className="flex items-center gap-2">
                   <Avatar>
                     <AvatarImage
-                      src={participant.avatar}
-                      alt={participant.name}
+                      src={
+                        participant.image ??
+                        "/placeholder.svg?height=40&width=40"
+                      }
+                      alt={participant.name ?? ""}
                     />
                     <AvatarFallback>
                       {participant.name
-                        .split(" ")
+                        ?.split(" ")
                         .map((n) => n[0])
                         .join("")}
                     </AvatarFallback>
