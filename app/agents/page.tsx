@@ -1,4 +1,5 @@
 "use client";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -10,7 +11,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+
+import { useGlobalContext } from "../context/GlobalContext";
 
 interface Agent {
   id: string;
@@ -26,6 +28,7 @@ interface Agent {
 }
 
 export default function AgentsPage() {
+  const { intent } = useGlobalContext();
   const router = useRouter();
   const searchParams = useSearchParams();
   const presentationId = searchParams.get("presentationId");
@@ -364,6 +367,9 @@ export default function AgentsPage() {
             <p className="text-gray-400 text-lg max-w-2xl mx-auto">
               Select one or more personas that will be present in your practice
               session.
+            </p>
+            <p className="text-gray-400 text-lg max-w-2xl mx-auto">
+              Current Intent: {intent}
             </p>
           </div>
 
