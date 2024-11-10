@@ -1,30 +1,30 @@
-"use client";
-import { useParams } from "next/navigation";
-import Image from "next/image";
-import { useState, useEffect, useRef } from "react";
+'use client';
+import { useParams, useRouter } from 'next/navigation';
+import Image from 'next/image';
+import { useState, useEffect, useRef } from 'react';
 
-import { useGlobalContext } from "@/app/context/GlobalContext";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { useGlobalContext } from '@/app/context/GlobalContext';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
-} from "@/components/ui/tooltip";
-import { cn } from "@/lib/utils";
-import { Conversation } from "@11labs/client";
-import { Circle, Video, VideoOff } from "lucide-react";
-import Spinner from "./Spinner";
+} from '@/components/ui/tooltip';
+import { cn } from '@/lib/utils';
+import { Conversation } from '@11labs/client';
+import { Circle, Video, VideoOff } from 'lucide-react';
+import Spinner from './Spinner';
 
 const avatarImages = [
-  "/avatar_1.svg",
-  "/avatar_2.svg",
-  "/avatar_3.svg",
-  "/avatar_4.svg",
-  "/avatar_5.svg",
-  "/avatar_6.svg",
+  '/avatar_1.svg',
+  '/avatar_2.svg',
+  '/avatar_3.svg',
+  '/avatar_4.svg',
+  '/avatar_5.svg',
+  '/avatar_6.svg',
   // Add more paths as needed
 ];
 
@@ -39,15 +39,15 @@ async function requestMicrophonePermission() {
     await navigator.mediaDevices.getUserMedia({ audio: true });
     return true;
   } catch {
-    console.error("Microphone permission denied");
+    console.error('Microphone permission denied');
     return false;
   }
 }
 
 async function getSignedUrl(): Promise<string> {
-  const response = await fetch("/api/signed-url");
+  const response = await fetch('/api/signed-url');
   if (!response.ok) {
-    throw Error("Failed to get signed url");
+    throw Error('Failed to get signed url');
   }
   const data = await response.json();
   return data.signedUrl;
@@ -103,6 +103,7 @@ function queueUpdate(updateFunction: () => void) {
 }
 
 export function ConvAI() {
+  const router = useRouter();
   const { intent } = useGlobalContext();
   const { presentationId } = useParams<{ presentationId: string }>();
   const [presentationData, setPresentationData] = useState<any>(null);
@@ -117,8 +118,8 @@ export function ConvAI() {
   const [isRunning, setIsRunning] = useState(false);
 
   const [recordingStatus, setRecordingStatus] = useState<
-    "notStarted" | "recording" | "paused" | "finished"
-  >("notStarted");
+    'notStarted' | 'recording' | 'paused' | 'finished'
+  >('notStarted');
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
@@ -130,7 +131,7 @@ export function ConvAI() {
   );
 
   useEffect(() => {
-    console.log("timestamps: ", timestamps);
+    console.log('timestamps: ', timestamps);
   }, [timestamps]);
 
   const conversationIds: string[] = [];
@@ -141,26 +142,26 @@ export function ConvAI() {
         // Turn off the video
         const stream = videoRef.current.srcObject as MediaStream | null;
         if (stream) {
-          console.log("Stopping video tracks");
+          console.log('Stopping video tracks');
           stream.getVideoTracks().forEach((track) => track.stop());
           videoRef.current.srcObject = null;
         }
       } else {
         // Turn on the video
         try {
-          console.log("Requesting video stream");
+          console.log('Requesting video stream');
           const stream = await navigator.mediaDevices.getUserMedia({
             video: true,
             audio: false, // No audio
           });
-          console.log("Video stream obtained", stream);
+          console.log('Video stream obtained', stream);
           videoRef.current.srcObject = stream;
         } catch (error) {
-          console.error("Error accessing camera:", error);
+          console.error('Error accessing camera:', error);
         }
       }
     } else {
-      console.error("Video element reference is null");
+      console.error('Video element reference is null');
     }
     setIsVideoOn((prev) => !prev);
   };
@@ -178,7 +179,7 @@ export function ConvAI() {
     const agents = await fetchPresentationData(id);
     console.log(`agents:`, agents);
     if (!agents) {
-      console.error("could not fetch and prepare agents");
+      console.error('could not fetch and prepare agents');
       return;
     }
     await updateAgentsWithIntent(id, intent, agents);
@@ -203,7 +204,7 @@ export function ConvAI() {
 
   async function getHighlights() {
     await fetch(`/api/presentation/${presentationId}/recording`, {
-      method: "POST",
+      method: 'POST',
       body: JSON.stringify({
         conversationIds: conversationIds,
         timestamps: timestamps,
@@ -229,14 +230,14 @@ export function ConvAI() {
             presentationId: id,
           };
           const response = await fetch(`/api/agents/setup-voice`, {
-            method: "PATCH",
+            method: 'PATCH',
             body: JSON.stringify(body),
           });
           if (!response.ok) {
             console.error(
               `Failed to update agents with intent: ${response.statusText}`
             );
-            throw new Error("Failed to update agents with intent");
+            throw new Error('Failed to update agents with intent');
           }
           const result = await response.json();
           console.log(`updateAgentsWithIntent::result:`, result);
@@ -255,13 +256,13 @@ export function ConvAI() {
         console.error(
           `Failed to fetch presentation data: ${response.statusText}`
         );
-        throw new Error("Failed to fetch presentation data");
+        throw new Error('Failed to fetch presentation data');
       }
       const agents = (await response.json()) as Agent[];
       console.log(`agents:`, agents);
       return agents;
     } catch (error) {
-      console.error("Error fetching presentation data:", error);
+      console.error('Error fetching presentation data:', error);
     }
   }
 
@@ -310,7 +311,7 @@ export function ConvAI() {
           videoRef.current.srcObject = stream;
         }
       } catch (error) {
-        console.error("Error accessing camera:", error);
+        console.error('Error accessing camera:', error);
       }
     }
 
@@ -364,34 +365,35 @@ export function ConvAI() {
     const minutes = Math.floor((seconds % 3600) / 60);
     const secs = Math.floor(seconds % 60);
     const tenths = Math.floor((seconds * 10) % 10); // Calculate tenths of a second
-    return `${hours.toString().padStart(2, "0")}:${minutes
+    return `${hours.toString().padStart(2, '0')}:${minutes
       .toString()
-      .padStart(2, "0")}:${secs.toString().padStart(2, "0")}.${tenths}`;
+      .padStart(2, '0')}:${secs.toString().padStart(2, '0')}.${tenths}`;
   };
 
   const handleCommand = async (action: string) => {
     switch (action) {
-      case "start":
+      case 'start':
         startAllConversations();
         setIsRunning(true);
-        setRecordingStatus("recording");
+        setRecordingStatus('recording');
         break;
-      case "resume":
+      case 'resume':
         setIsRunning(true);
         currentSpeakerId = null;
-        setRecordingStatus("recording");
+        setRecordingStatus('recording');
         break;
-      case "pause":
+      case 'pause':
         setIsRunning(false);
         currentSpeakerId = null;
-        setRecordingStatus("paused");
+        setRecordingStatus('paused');
         break;
-      case "finish":
+      case 'finish':
         setIsRunning(false);
         currentSpeakerId = null;
         await endConversation();
-        setRecordingStatus("finished");
+        setRecordingStatus('finished');
         await getHighlights();
+        router.push(`/highlights/${presentationId}`);
         break;
     }
   };
@@ -399,14 +401,14 @@ export function ConvAI() {
   async function startAllConversations() {
     const hasPermission = await requestMicrophonePermission();
     if (!hasPermission) {
-      alert("No permission");
+      alert('No permission');
       return;
     }
 
     const updatedSessions = await Promise.all(
       participants.map(async (participant) => {
         const session = await Conversation.startSession({
-          agentId: participant.elevenlabs_id ?? "",
+          agentId: participant.elevenlabs_id ?? '',
           onConnect: () => {
             console.log(`${participant.name} connected`);
           },
@@ -415,10 +417,10 @@ export function ConvAI() {
           },
           onError: (error) => {
             console.log(error);
-            alert("An error occurred during the conversation");
+            alert('An error occurred during the conversation');
           },
           onModeChange: ({ mode }) => {
-            if (mode === "speaking") {
+            if (mode === 'speaking') {
               if (currentSpeakerId === null) {
                 currentSpeakerId = participant.id;
               }
@@ -484,7 +486,7 @@ export function ConvAI() {
   if (loading) {
     return (
       <div className="min-h-screen bg-background text-foreground flex flex-col dark">
-        <main className="flex flex-grow p-4 overflow-auto  h-full items-center justify-center">
+        <main className="flex flex-grow p-4 overflow-auto h-full items-center justify-center">
           <Spinner />
         </main>
       </div>
@@ -493,17 +495,17 @@ export function ConvAI() {
 
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col dark">
-      <main className="flex flex-grow p-4 overflow-auto  h-full items-center justify-center">
+      <main className="flex flex-grow p-4 overflow-auto h-full items-center justify-center">
         <div
           className="flex gap-4 justify-center items-center h-full"
-          style={{ height: "100%" }}
+          style={{ height: '100%' }}
         >
           {participants.map((participant, index) => (
             <Card
               key={participant.id}
               className={cn(
-                "bg-card text-card-foreground min-w-[200px] sm:min-w-[300px] md:min-w-[500px] w-[50%] h-[50%]",
-                participant.id === currentSpeakerId ? "border-blue-500" : ""
+                'bg-card text-card-foreground min-w-[200px] sm:min-w-[300px] md:min-w-[500px] w-[50%] h-[50%]',
+                participant.id === currentSpeakerId ? 'border-blue-500' : ''
               )}
             >
               <CardContent className="p-4">
@@ -521,16 +523,16 @@ export function ConvAI() {
                     <AvatarImage
                       src={
                         participant.image ??
-                        "/placeholder.svg?height=40&width=40"
+                        '/placeholder.svg?height=40&width=40'
                       }
-                      alt={participant.name ?? ""}
+                      alt={participant.name ?? ''}
                       className="w-full h-full object-cover"
                     />
                     <AvatarFallback>
                       {participant.name
-                        ?.split(" ")
+                        ?.split(' ')
                         .map((n) => n[0])
-                        .join("")}
+                        .join('')}
                     </AvatarFallback>
                   </Avatar>
                   <span className="font-medium">{participant.name}</span>
@@ -586,40 +588,40 @@ export function ConvAI() {
               <div className="text-2xl font-bold mb-2">{formatTime(time)}</div>
               <div
                 className={cn(
-                  "flex items-center rounded-full px-2 py-1",
-                  recordingStatus === "notStarted" && "bg-gray-500",
-                  recordingStatus === "recording" && "bg-red-500 bg-opacity-75",
-                  recordingStatus === "paused" && "bg-blue-500",
-                  recordingStatus === "finished" && "bg-green-500"
+                  'flex items-center rounded-full px-2 py-1',
+                  recordingStatus === 'notStarted' && 'bg-gray-500',
+                  recordingStatus === 'recording' && 'bg-red-500 bg-opacity-75',
+                  recordingStatus === 'paused' && 'bg-blue-500',
+                  recordingStatus === 'finished' && 'bg-green-500'
                 )}
               >
                 <Circle className="h-3 w-3 text-white animate-pulse mr-1" />
                 <span className="text-white text-xs font-medium">
-                  {recordingStatus === "notStarted" && "NOT STARTED"}
-                  {recordingStatus === "recording" && "RECORDING"}
-                  {recordingStatus === "paused" && "PAUSED"}
-                  {recordingStatus === "finished" && "FINISHED"}
+                  {recordingStatus === 'notStarted' && 'NOT STARTED'}
+                  {recordingStatus === 'recording' && 'RECORDING'}
+                  {recordingStatus === 'paused' && 'PAUSED'}
+                  {recordingStatus === 'finished' && 'FINISHED'}
                 </span>
               </div>
             </div>
 
             <div>
-              <Button onClick={() => handleCommand("start")} className="m-1">
+              <Button onClick={() => handleCommand('start')} className="m-1">
                 Start
               </Button>
-              <Button onClick={() => handleCommand("pause")} className="m-1">
+              <Button onClick={() => handleCommand('pause')} className="m-1">
                 Pause
               </Button>
-              <Button onClick={() => handleCommand("resume")} className="m-1">
+              <Button onClick={() => handleCommand('resume')} className="m-1">
                 Resume
               </Button>
-              <Button onClick={() => handleCommand("finish")} className="m-1">
+              <Button onClick={() => handleCommand('finish')} className="m-1">
                 Finish
               </Button>
             </div>
           </CardContent>
         </Card>
-      </div>{" "}
+      </div>{' '}
     </div>
   );
 }
