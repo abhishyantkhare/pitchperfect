@@ -51,6 +51,12 @@ type Agent = {
   system_prompt: string | null;
 };
 
+type Timestamp = {
+  start: number;
+  end: number | null;
+  conversation_id: string | null;
+};
+
 let updateQueue: (() => void)[] = [];
 let isProcessingQueue = false;
 let currentSpeakerId: string | null = null;
@@ -78,7 +84,6 @@ function queueUpdate(updateFunction: () => void) {
   }
 }
 
-
 export function ConvAI() {
   const { intent } = useGlobalContext();
   const { presentationId } = useParams<{ presentationId: string }>();
@@ -99,6 +104,23 @@ export function ConvAI() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
 
   const [isVideoOn, setIsVideoOn] = useState(true);
+
+  const [timestamps, setTimestamps] = useState<Timestamp[]>([
+    {
+      start: 0,
+      end: null,
+      conversation_id: null,
+    },
+  ]);
+  const [previousSpeakerId, setPreviousSpeakerId] = useState<string | null>(
+    null
+  );
+
+  useEffect(() => {
+    console.log("timestamps: ", timestamps);
+  }, [timestamps]);
+
+  const conversationIds: string[] = [];
 
   const toggleVideo = async () => {
     if (videoRef.current) {
@@ -139,7 +161,7 @@ export function ConvAI() {
   }, [presentationId]);
 
   async function prepareAgents(id: string) {
-        // setIsLoading(true);
+    // setIsLoading(true);
     const agents = await fetchPresentationData(id);
     console.log(`agents:`, agents);
     if (!agents) {
@@ -148,51 +170,57 @@ export function ConvAI() {
     }
     await updateAgentsWithIntent(id, intent, agents);
     console.log(
-        `sessions:`,
-        agents.reduce((acc, agent) => {
-          acc[agent.id] = null;
-          return acc;
-        }, {} as { [key: string]: Conversation | null })
-      );
+      `sessions:`,
+      agents.reduce((acc, agent) => {
+        acc[agent.id] = null;
+        return acc;
+      }, {} as { [key: string]: Conversation | null })
+    );
 
-      setParticipants(agents);
-      setSessions(
-        agents.reduce((acc, agent) => {
-          acc[agent.id] = null;
-          return acc;
-        }, {} as { [key: string]: Conversation | null })
-      );
+    setParticipants(agents);
+    setSessions(
+      agents.reduce((acc, agent) => {
+        acc[agent.id] = null;
+        return acc;
+      }, {} as { [key: string]: Conversation | null })
+    );
     // setIsLoading(false);
   }
-  
-  async function updateAgentsWithIntent(id: string, intent: string, agents: Agent[]) {
+
+  async function updateAgentsWithIntent(
+    id: string,
+    intent: string,
+    agents: Agent[]
+  ) {
     console.log(`updateAgentsWithIntent::id:`, id);
     console.log(`updateAgentsWithIntent::intent:`, intent);
 
-    await Promise.all(agents.map(async (agent) => {
-      try {
-        const { id: agentId } = agent;
-        const body = {
-          intent,
-          agentId,
-          presentationId: id
+    await Promise.all(
+      agents.map(async (agent) => {
+        try {
+          const { id: agentId } = agent;
+          const body = {
+            intent,
+            agentId,
+            presentationId: id,
+          };
+          const response = await fetch(`/api/agents/setup-voice`, {
+            method: "PATCH",
+            body: JSON.stringify(body),
+          });
+          if (!response.ok) {
+            console.error(
+              `Failed to update agents with intent: ${response.statusText}`
+            );
+            throw new Error("Failed to update agents with intent");
+          }
+          const result = await response.json();
+          console.log(`updateAgentsWithIntent::result:`, result);
+        } catch (error) {
+          console.error(`updateAgentsWithIntent::error:`, error);
         }
-        const response = await fetch(`/api/agents/setup-voice`, {
-          method: "PATCH",
-          body: JSON.stringify(body),
-        });
-        if (!response.ok) {
-          console.error(
-            `Failed to update agents with intent: ${response.statusText}`
-          );
-          throw new Error("Failed to update agents with intent");
-        }
-        const result = await response.json();
-        console.log(`updateAgentsWithIntent::result:`, result);
-      } catch (error) {
-        console.error(`updateAgentsWithIntent::error:`, error);
-      }
-    }));
+      })
+    );
   }
 
   async function fetchPresentationData(id: string) {
@@ -207,7 +235,7 @@ export function ConvAI() {
       }
       const agents = (await response.json()) as Agent[];
       console.log(`agents:`, agents);
-      return agents
+      return agents;
     } catch (error) {
       console.error("Error fetching presentation data:", error);
     }
@@ -271,6 +299,40 @@ export function ConvAI() {
       }
     };
   }, []);
+
+  useEffect(() => {
+    if (currentSpeakerId !== previousSpeakerId) {
+      let currId = currentSpeakerId;
+      let currTime = time;
+
+      // Add an end timestamp for the previous speaker
+      let endTimestamp = null;
+      if (timestamps.length > 0) {
+        endTimestamp = {
+          start: timestamps[timestamps.length - 1]?.start || 0,
+          end: currTime,
+          conversation_id:
+            timestamps[timestamps.length - 1]?.conversation_id ?? null,
+        };
+      }
+
+      // Add a start timestamp for the new speaker
+      const startTimestamp = {
+        start: timestamps.length === 0 ? 0 : currTime,
+        end: null, // Placeholder, will be updated when the speaker changes again
+        conversation_id: currId ? sessions[currId]?.getId() ?? null : null,
+      };
+      setTimestamps((prev) => {
+        const newTimestamps = [...prev];
+        if (endTimestamp) {
+          newTimestamps[newTimestamps.length - 1] = endTimestamp;
+        }
+        newTimestamps.push(startTimestamp);
+        return newTimestamps;
+      });
+      setPreviousSpeakerId(currId);
+    }
+  }, [currentSpeakerId, time, sessions, timestamps]);
 
   const formatTime = (seconds: number) => {
     const hours = Math.floor(seconds / 3600);
@@ -341,6 +403,8 @@ export function ConvAI() {
             }
           },
         });
+        const sessionId = await session.getId();
+        conversationIds.push(sessionId);
         if (participant.id === currentSpeakerId) {
           session.setVolume({ volume: 0.5 });
         } else {
@@ -370,6 +434,16 @@ export function ConvAI() {
   }
 
   async function endConversation() {
+    // Add the final timestamp
+    const finalTimestamp = {
+      start: timestamps[timestamps.length - 1]?.start || 0,
+      end: time,
+      conversation_id:
+        timestamps[timestamps.length - 1]?.conversation_id ?? null,
+    };
+    setTimestamps((prev) => [...prev.slice(0, -1), finalTimestamp]);
+    console.log("Final Timestamp Added:", finalTimestamp);
+
     for (const participant of participants) {
       const session = sessions[participant.id];
       if (session) {
