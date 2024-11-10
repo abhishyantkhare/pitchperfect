@@ -15,6 +15,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import Spinner from "./Spinner";
 
 async function requestMicrophonePermission() {
   try {
@@ -78,12 +79,11 @@ function queueUpdate(updateFunction: () => void) {
   }
 }
 
-
 export function ConvAI() {
   const { intent } = useGlobalContext();
   const { presentationId } = useParams<{ presentationId: string }>();
   const [presentationData, setPresentationData] = useState<any>(null);
-
+  const [loading, setLoading] = useState(false);
   const [participants, setParticipants] = useState<Agent[]>([]);
   const [sessions, setSessions] = useState<{
     [key: string]: Conversation | null;
@@ -139,7 +139,7 @@ export function ConvAI() {
   }, [presentationId]);
 
   async function prepareAgents(id: string) {
-        // setIsLoading(true);
+    setLoading(true);
     const agents = await fetchPresentationData(id);
     console.log(`agents:`, agents);
     if (!agents) {
@@ -148,51 +148,57 @@ export function ConvAI() {
     }
     await updateAgentsWithIntent(id, intent, agents);
     console.log(
-        `sessions:`,
-        agents.reduce((acc, agent) => {
-          acc[agent.id] = null;
-          return acc;
-        }, {} as { [key: string]: Conversation | null })
-      );
+      `sessions:`,
+      agents.reduce((acc, agent) => {
+        acc[agent.id] = null;
+        return acc;
+      }, {} as { [key: string]: Conversation | null })
+    );
 
-      setParticipants(agents);
-      setSessions(
-        agents.reduce((acc, agent) => {
-          acc[agent.id] = null;
-          return acc;
-        }, {} as { [key: string]: Conversation | null })
-      );
-    // setIsLoading(false);
+    setParticipants(agents);
+    setSessions(
+      agents.reduce((acc, agent) => {
+        acc[agent.id] = null;
+        return acc;
+      }, {} as { [key: string]: Conversation | null })
+    );
+    setLoading(false);
   }
-  
-  async function updateAgentsWithIntent(id: string, intent: string, agents: Agent[]) {
+
+  async function updateAgentsWithIntent(
+    id: string,
+    intent: string,
+    agents: Agent[]
+  ) {
     console.log(`updateAgentsWithIntent::id:`, id);
     console.log(`updateAgentsWithIntent::intent:`, intent);
 
-    await Promise.all(agents.map(async (agent) => {
-      try {
-        const { id: agentId } = agent;
-        const body = {
-          intent,
-          agentId,
-          presentationId: id
+    await Promise.all(
+      agents.map(async (agent) => {
+        try {
+          const { id: agentId } = agent;
+          const body = {
+            intent,
+            agentId,
+            presentationId: id,
+          };
+          const response = await fetch(`/api/agents/setup-voice`, {
+            method: "PATCH",
+            body: JSON.stringify(body),
+          });
+          if (!response.ok) {
+            console.error(
+              `Failed to update agents with intent: ${response.statusText}`
+            );
+            throw new Error("Failed to update agents with intent");
+          }
+          const result = await response.json();
+          console.log(`updateAgentsWithIntent::result:`, result);
+        } catch (error) {
+          console.error(`updateAgentsWithIntent::error:`, error);
         }
-        const response = await fetch(`/api/agents/setup-voice`, {
-          method: "PATCH",
-          body: JSON.stringify(body),
-        });
-        if (!response.ok) {
-          console.error(
-            `Failed to update agents with intent: ${response.statusText}`
-          );
-          throw new Error("Failed to update agents with intent");
-        }
-        const result = await response.json();
-        console.log(`updateAgentsWithIntent::result:`, result);
-      } catch (error) {
-        console.error(`updateAgentsWithIntent::error:`, error);
-      }
-    }));
+      })
+    );
   }
 
   async function fetchPresentationData(id: string) {
@@ -207,7 +213,7 @@ export function ConvAI() {
       }
       const agents = (await response.json()) as Agent[];
       console.log(`agents:`, agents);
-      return agents
+      return agents;
     } catch (error) {
       console.error("Error fetching presentation data:", error);
     }
@@ -262,7 +268,9 @@ export function ConvAI() {
       }
     }
 
-    startVideoStream();
+    if (!loading) {
+      startVideoStream();
+    }
 
     return () => {
       if (videoRef.current && videoRef.current.srcObject) {
@@ -270,7 +278,7 @@ export function ConvAI() {
         stream.getTracks().forEach((track) => track.stop());
       }
     };
-  }, []);
+  }, [loading]);
 
   const formatTime = (seconds: number) => {
     const hours = Math.floor(seconds / 3600);
@@ -387,6 +395,16 @@ export function ConvAI() {
         ...participant,
         speaking: false,
       }))
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background text-foreground flex flex-col dark">
+        <main className="flex flex-grow p-4 overflow-auto  h-full items-center justify-center">
+          <Spinner />
+        </main>
+      </div>
     );
   }
 
