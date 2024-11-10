@@ -75,45 +75,10 @@ export function ConvAI() {
   const { presentationId } = useParams<{ presentationId: string }>();
   const [presentationData, setPresentationData] = useState<any>(null);
 
-  const [participants, setParticipants] = useState<Agent[]>([
-    {
-      id: "1",
-      created_at: new Date().toISOString(),
-      name: "John Doe",
-      persona: null,
-      knowledge: null,
-      image: "/placeholder.svg?height=40&width=40",
-      updated_at: null,
-      elevenlabs_id: "K0PRQtUKFWGL4wTjQ1i6",
-      voice_description: null,
-      elevenlabs_voice_id: null,
-      creation_status: null,
-      system_prompt: null,
-    },
-    {
-      id: "2",
-      created_at: new Date().toISOString(),
-      name: "Jane Smith",
-      persona: null,
-      knowledge: null,
-      image: "/placeholder.svg?height=40&width=40",
-      updated_at: null,
-      elevenlabs_id: "RdcFm7gBumcTAb8zgExV",
-      voice_description: null,
-      elevenlabs_voice_id: null,
-      creation_status: null,
-      system_prompt: null,
-    },
-    // Add more agents as needed
-  ]);
-
+  const [participants, setParticipants] = useState<Agent[]>([]);
   const [sessions, setSessions] = useState<{
     [key: string]: Conversation | null;
-  }>({
-    "1": null,
-    "2": null,
-    // Initialize other participant sessions as needed
-  });
+  }>({});
 
   const [time, setTime] = useState(0);
   const [isRunning, setIsRunning] = useState(false);
@@ -135,9 +100,11 @@ export function ConvAI() {
         );
         throw new Error("Failed to fetch presentation data");
       }
-      const data = await response.json();
-      setPresentationData(data);
-      console.log(`presentationData:`, presentationData);
+      const agents = (await response.json()) as Agent[];
+      console.log(`agents:`, agents);
+
+      setParticipants(agents);
+      console.log(`participants:`, participants);
     } catch (error) {
       console.error("Error fetching presentation data:", error);
     }
