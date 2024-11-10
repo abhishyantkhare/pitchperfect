@@ -102,15 +102,28 @@ export function ConvAI() {
       }
       const agents = (await response.json()) as Agent[];
       console.log(`agents:`, agents);
+      console.log(
+        `sessions:`,
+        agents.reduce((acc, agent) => {
+          acc[agent.id] = null;
+          return acc;
+        }, {} as { [key: string]: Conversation | null })
+      );
 
       setParticipants(agents);
-      console.log(`participants:`, participants);
+      setSessions(
+        agents.reduce((acc, agent) => {
+          acc[agent.id] = null;
+          return acc;
+        }, {} as { [key: string]: Conversation | null })
+      );
     } catch (error) {
       console.error("Error fetching presentation data:", error);
     }
   }
 
   useEffect(() => {
+    console.log(`currentSpeakerId: ${currentSpeakerId}`);
     if (currentSpeakerId === null) {
       for (const entry of Object.entries(sessions)) {
         const [id, session] = entry;
@@ -156,7 +169,6 @@ export function ConvAI() {
     switch (action) {
       case "start":
         startAllConversations();
-        currentSpeakerId = "1";
         setIsRunning(true);
         break;
       case "resume":
