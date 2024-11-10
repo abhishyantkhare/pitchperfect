@@ -104,8 +104,12 @@ async function spliceAudioFiles(speakingTimes: any[], audioFiles: string[]) {
       // this the agent speaking, so we capture the start time
       currStart = speakingTime.start;
       currConversationId = speakingTime.conversation_id;
-      continue;
-    } else {
+      if (i !== speakingTimes.length - 1) {
+        continue;
+      }
+    }
+    if (i === speakingTimes.length - 1 || !speakingTime.conversation_id) {
+    {
       // this is the user speaking, so we capture the end time
       // but save it with the conversation_id of the previous agent
       const tempFilePath = path.join(os.tmpdir(), `${currConversationId}.mp3`);
@@ -121,17 +125,27 @@ async function spliceAudioFiles(speakingTimes: any[], audioFiles: string[]) {
       });
     }
   }
+  }
 
   // Concatenate all the files using ffmpeg
   // Create a command to combine all audio clips
-  const command = ffmpeg();
 
-  // Add each audio clip to the ffmpeg command
+
+   
+  await new Promise((resolve, reject) => {
+     // Add each audio clip to the ffmpeg command
+     const command = ffmpeg();
+console.log("merge files")
   speakingTimes.forEach((speakingTime, i) => {
-    const clipPath = path.resolve(os.tmpdir(), `clip_${i}.mp3`);
-    command.input(clipPath);
+      const clipPath = path.resolve(os.tmpdir(), `clip_${i}.mp3`);
+      console.log(`clipPath:`, clipPath);
+      command.input(clipPath);
+    });
+    command.mergeToFile(path.resolve(os.tmpdir(), 'combined_audio.mp3'), os.tmpdir());
+    resolve(null);
   });
-  command.mergeToFile('combined_audio.mp3', os.tmpdir());
+  await new Promise((resolve) => setTimeout(resolve, 5000));
+
 }
 
 export async function POST(
@@ -180,6 +194,7 @@ export async function POST(
       model: 'whisper-1',
       response_format: 'verbose_json',
     });
+    console.log(`transcription:`, transcription);
 
     // Parse the transcription into a list of tuples with the id and text
     const transcriptTuples = transcription.segments?.map((segment: any) => {
@@ -214,7 +229,7 @@ export async function POST(
     const weakAreas = highlightResponseData?.weak_areas
       .map((weakArea: any) =>
         transcription.segments?.find(
-          (segment: any) => segment.id === weakArea.id
+          (segment: any, index: number) => segment.id === weakArea.id
         )
       )
       .filter(
