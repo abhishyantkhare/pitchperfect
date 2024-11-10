@@ -4,10 +4,16 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { Conversation } from "@11labs/client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Mic, Video, PhoneOff, Circle } from "lucide-react";
+import { Mic, Video, PhoneOff, VideoOff, Circle } from "lucide-react";
 import { useParams } from "next/navigation";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 async function requestMicrophonePermission() {
   try {
@@ -87,6 +93,40 @@ export function ConvAI() {
     "notStarted" | "recording" | "paused" | "finished"
   >("notStarted");
 
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+
+  const [isVideoOn, setIsVideoOn] = useState(true);
+
+  const toggleVideo = async () => {
+    if (videoRef.current) {
+      if (isVideoOn) {
+        // Turn off the video
+        const stream = videoRef.current.srcObject as MediaStream | null;
+        if (stream) {
+          console.log("Stopping video tracks");
+          stream.getVideoTracks().forEach((track) => track.stop());
+          videoRef.current.srcObject = null;
+        }
+      } else {
+        // Turn on the video
+        try {
+          console.log("Requesting video stream");
+          const stream = await navigator.mediaDevices.getUserMedia({
+            video: true,
+            audio: false, // No audio
+          });
+          console.log("Video stream obtained", stream);
+          videoRef.current.srcObject = stream;
+        } catch (error) {
+          console.error("Error accessing camera:", error);
+        }
+      }
+    } else {
+      console.error("Video element reference is null");
+    }
+    setIsVideoOn((prev) => !prev);
+  };
+
   useEffect(() => {
     console.log(`presentationId:`, presentationId);
     if (presentationId) {
@@ -159,6 +199,31 @@ export function ConvAI() {
     }
     return () => clearInterval(interval);
   }, [isRunning]);
+
+  useEffect(() => {
+    async function startVideoStream() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: false, // No audio
+        });
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+        }
+      } catch (error) {
+        console.error("Error accessing camera:", error);
+      }
+    }
+
+    startVideoStream();
+
+    return () => {
+      if (videoRef.current && videoRef.current.srcObject) {
+        const stream = videoRef.current.srcObject as MediaStream;
+        stream.getTracks().forEach((track) => track.stop());
+      }
+    };
+  }, []);
 
   const formatTime = (seconds: number) => {
     const hours = Math.floor(seconds / 3600);
@@ -321,21 +386,40 @@ export function ConvAI() {
       <div className="border-t border-border p-4 flex flex-col sm:flex-row gap-4">
         <Card className="flex-grow bg-card text-card-foreground">
           <CardContent className="p-4 flex items-center gap-4">
-            <div className="aspect-video bg-muted rounded-lg w-40"></div>
+            <div className="aspect-video bg-muted rounded-lg w-40 relative">
+              <video
+                ref={videoRef}
+                autoPlay
+                muted
+                className="w-full h-full object-cover rounded-lg"
+              ></video>
+              {!isVideoOn && (
+                <div className="absolute inset-0 flex items-center justify-center  z-10">
+                  <VideoOff className="h-6 w-6 text-muted-foreground" />
+                </div>
+              )}
+            </div>
             <div>
               <h3 className="font-semibold">Your Video</h3>
               <p className="text-sm text-muted-foreground">You</p>
             </div>
             <div className="ml-auto flex gap-2">
-              <Button size="icon" variant="outline">
-                <Mic className="h-4 w-4" />
-              </Button>
-              <Button size="icon" variant="outline">
-                <Video className="h-4 w-4" />
-              </Button>
-              <Button size="icon" variant="destructive">
-                <PhoneOff className="h-4 w-4" />
-              </Button>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button size="icon" variant="outline" onClick={toggleVideo}>
+                      {isVideoOn ? (
+                        <Video className="h-4 w-4" />
+                      ) : (
+                        <VideoOff className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Toggle Video</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             </div>
           </CardContent>
         </Card>
