@@ -1,18 +1,17 @@
-import { createClient } from '@/utils/supabase/server';
 import { NextResponse } from 'next/server';
-
 
 import ffmpeg from 'fluent-ffmpeg';
 import fs from 'fs';
-import OpenAI from "openai";
-import { zodResponseFormat } from "openai/helpers/zod";
+import OpenAI from 'openai';
+import { zodResponseFormat } from 'openai/helpers/zod';
 import os from 'os';
 import path from 'path';
 
+import { ElevenLabsService } from '@/app/api/services/ElevenLabsService';
+import { Timestamp } from '@/components/ConvAI';
+import { createClient } from '@/utils/supabase/server';
 import { TranscriptionSegment } from 'openai/resources/audio/transcriptions.mjs';
-import { z } from "zod";
-
-
+import { z } from 'zod';
 
 const openai = new OpenAI();
 
@@ -50,31 +49,90 @@ The repsonse should be in a json format like so:
     }
   ]
 }
-`
+`;
 
-async function splitAudioFile(fileData: Blob, weakAreas?: TranscriptionSegment[]) {
+async function splitAudioFile(
+  fileData: Blob,
+  weakAreas?: TranscriptionSegment[]
+) {
   const tempFilePath = path.join(os.tmpdir(), 'temp_recording.mp3');
   const buffer = Buffer.from(await fileData.arrayBuffer());
   fs.writeFileSync(tempFilePath, buffer);
 
-  const clippedFiles = await Promise.all(weakAreas?.map(async (weakArea) => {
-    const outputFilePath = path.join(os.tmpdir(), `clip_${weakArea.id}.mp3`);
-    await new Promise((resolve, reject) => {
-      ffmpeg(tempFilePath)
-        .setStartTime(weakArea.start)
-        .setDuration(weakArea.end - weakArea.start)
-        .output(outputFilePath)
-        .on('end', resolve)
-        .on('error', reject)
-        .run();
-    });
-    return fs.readFileSync(outputFilePath);
-  }) ?? []);
+  const clippedFiles = await Promise.all(
+    weakAreas?.map(async (weakArea) => {
+      const outputFilePath = path.join(os.tmpdir(), `clip_${weakArea.id}.mp3`);
+      await new Promise((resolve, reject) => {
+        ffmpeg(tempFilePath)
+          .setStartTime(weakArea.start)
+          .setDuration(weakArea.end - weakArea.start)
+          .output(outputFilePath)
+          .on('end', resolve)
+          .on('error', reject)
+          .run();
+      });
+      return fs.readFileSync(outputFilePath);
+    }) ?? []
+  );
 
   return clippedFiles;
 }
 
+async function spliceAudioFiles(speakingTimes: any[], audioFiles: string[]) {
+  let currStart = 0;
+  // create audio file for first speaking time. we do this because the
+  // first speaking time never has a conversation_id because it's the user speaking
+  const firstSpeakingTime = speakingTimes[0];
+  const firstAudioFile = audioFiles[0];
+  const firstOutputFilePath = path.join(os.tmpdir(), `clip_0.mp3`);
+  await new Promise((resolve, reject) => {
+    ffmpeg(firstAudioFile)
+      .setStartTime(currStart)
+      .setDuration(firstSpeakingTime.end - currStart)
+      .output(firstOutputFilePath)
+      .on('end', resolve)
+      .on('error', reject)
+      .run();
+  });
 
+  // create audio files for the rest of the speaking times
+  // each audio file contains the agent speaking + user response
+  let currConversationId: string | null = null;
+  for (let i = 1; i < speakingTimes.length; i++) {
+    const speakingTime = speakingTimes[i];
+    if (speakingTime.conversation_id) {
+      // this the agent speaking, so we capture the start time
+      currStart = speakingTime.start;
+      currConversationId = speakingTime.conversation_id;
+      continue;
+    } else {
+      // this is the user speaking, so we capture the end time
+      // but save it with the conversation_id of the previous agent
+      const tempFilePath = path.join(os.tmpdir(), `${currConversationId}.mp3`);
+      const outputFilePath = path.join(os.tmpdir(), `clip_${i}.mp3`);
+      await new Promise((resolve, reject) => {
+        ffmpeg(tempFilePath)
+          .setStartTime(currStart)
+          .setDuration(speakingTime.end - currStart)
+          .output(outputFilePath)
+          .on('end', resolve)
+          .on('error', reject)
+          .run();
+      });
+    }
+  }
+
+  // Concatenate all the files using ffmpeg
+  // Create a command to combine all audio clips
+  const command = ffmpeg();
+
+  // Add each audio clip to the ffmpeg command
+  speakingTimes.forEach((speakingTime, i) => {
+    const clipPath = path.resolve(os.tmpdir(), `clip_${i}.mp3`);
+    command.input(clipPath);
+  });
+  command.mergeToFile('combined_audio.mp3', os.tmpdir());
+}
 
 export async function POST(
   request: Request,
@@ -83,6 +141,13 @@ export async function POST(
   try {
     const { id } = await params;
     const presentationId = id;
+    const requestData = await request.json();
+    const conversationIdDups: string[] = requestData.timestamps
+      .filter((timeStamp: Timestamp) => timeStamp.conversation_id)
+      .map((timeStamp: Timestamp) => timeStamp.conversation_id);
+
+    // Remove duplicates
+    const conversationIds: string[] = [...new Set(conversationIdDups)];
 
     if (!presentationId) {
       return NextResponse.json(
@@ -91,34 +156,29 @@ export async function POST(
       );
     }
 
-    const supabase = await createClient();
-    
-    // Get the recording file from storage
-    const { data: fileData, error: downloadError } = await supabase.storage
-      .from('pitchperfectfiles')
-      .download(`${presentationId}/recording.mp3`);
+    // fetch all audio files from elevenlabs
+    const audioFiles = await Promise.all(
+      conversationIds.map(async (conversationId: string) => {
+        const fileData = await ElevenLabsService.fetchConversationAudio(
+          conversationId
+        );
+        console.log(fileData);
+        const buffer = Buffer.from(await fileData.arrayBuffer());
+        const outputFilePath = path.join(os.tmpdir(), `${conversationId}.mp3`);
+        await fs.writeFileSync(outputFilePath, buffer);
+        return outputFilePath;
+      })
+    );
 
-    if (downloadError) {
-      console.error('Error downloading recording:', downloadError);
-      return NextResponse.json(
-        { error: 'Failed to download recording' },
-        { status: 500 }
-      );
-    }
+    // splice the audio files
+    await spliceAudioFiles(requestData.timestamps, audioFiles);
 
-    if (!fileData) {
-      return NextResponse.json(
-        { error: 'No recording found' },
-        { status: 404 }
-      );
-    }
-
-    // Convert file data to buffer for sending to Deepgram
+    // Convert file data
 
     const transcription = await openai.audio.transcriptions.create({
-      file: new File([fileData], "recording.mp3", { type: "audio/mpeg" }),
-      model: "whisper-1",
-      response_format: "verbose_json",
+      file: fs.createReadStream(path.join(os.tmpdir(), 'combined_audio.mp3')),
+      model: 'whisper-1',
+      response_format: 'verbose_json',
     });
 
     // Parse the transcription into a list of tuples with the id and text
@@ -126,35 +186,58 @@ export async function POST(
       return [segment.id, segment.text];
     });
     // Convert the transcriptTuples to a string
-    const transcriptString = transcriptTuples?.map((tuple: any) => `${tuple[0]}, "${tuple[1]}"`).join("\n");
+    const transcriptString = transcriptTuples
+      ?.map((tuple: any) => `${tuple[0]}, "${tuple[1]}"`)
+      .join('\n');
 
     // Send the transcript to the highlight system prompt
     const highlightResponse = await openai.beta.chat.completions.parse({
-      messages: [{ role: "system", content: HIGHLIGHT_SYSTEM_PROMPT }, { role: "user", content: transcriptString || "" }],
-      model: "gpt-4o-2024-08-06",
-      response_format: zodResponseFormat(HighlightResponse, "highlight_response"),
+      messages: [
+        { role: 'system', content: HIGHLIGHT_SYSTEM_PROMPT },
+        { role: 'user', content: transcriptString || '' },
+      ],
+      model: 'gpt-4o-2024-08-06',
+      response_format: zodResponseFormat(
+        HighlightResponse,
+        'highlight_response'
+      ),
     });
 
     const highlightResponseData = highlightResponse.choices[0].message.parsed;
     // Map the ids back to the original transcript and return the segments
     // that are weak areas
+    const fileData = new Blob(
+      [fs.readFileSync(path.join(os.tmpdir(), 'combined_audio.mp3'))],
+      { type: 'audio/mpeg' }
+    );
+
     const weakAreas = highlightResponseData?.weak_areas
-      .map((weakArea: any) => transcription.segments?.find((segment: any) => segment.id === weakArea.id))
-      .filter((segment): segment is TranscriptionSegment => segment !== undefined);
+      .map((weakArea: any) =>
+        transcription.segments?.find(
+          (segment: any) => segment.id === weakArea.id
+        )
+      )
+      .filter(
+        (segment): segment is TranscriptionSegment => segment !== undefined
+      );
     const clippedFiles = await splitAudioFile(fileData, weakAreas);
 
     // Upload the weak area clips to storage
-    clippedFiles?.map(async (clip, index) => await supabase.storage.from('pitchperfectfiles').upload(`${presentationId}/weak_area_clips/clip_${index}.mp3`, clip));
-
+    const supabase = await createClient();
+    clippedFiles?.map(
+      async (clip, index) =>
+        await supabase.storage
+          .from('pitchperfectfiles')
+          .upload(`${presentationId}/weak_area_clips/clip_${index}.mp3`, clip)
+    );
 
     console.log(highlightResponseData);
 
     return NextResponse.json({
       // Include the file data as a base64 string if needed
       // data: Buffer.from(await fileData.arrayBuffer()).toString('base64')
-      highlightResponseData
+      highlightResponseData,
     });
-
   } catch (error) {
     console.error('Error in POST /api/presentation/[id]/recording:', error);
     return NextResponse.json(

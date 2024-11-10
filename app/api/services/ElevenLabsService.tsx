@@ -10,19 +10,20 @@ export class ElevenLabsService {
   static async createVoicePreview(voiceDescription: string, text: string) {
     try {
       const response = await fetch(
-        `${this.BASE_URL}/text-to-voice/create-voice-preview`,
+        `${this.BASE_URL}/text-to-voice/create-previews`,
         {
           method: "POST",
           headers: {
             "xi-api-key": `${this.API_KEY}`,
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ voiceDescription, text }),
+          body: JSON.stringify({ voice_description: voiceDescription, text }),
         }
       );
 
       if (!response.ok) {
         const errorData = await response.json();
+        console.log(errorData);
         const error: ElevenLabsError = new Error(
           errorData.message || response.statusText
         );
@@ -64,6 +65,7 @@ export class ElevenLabsService {
 
       if (!response.ok) {
         const errorData = await response.json();
+        console.log(errorData);
         const error: ElevenLabsError = new Error(
           errorData.message || response.statusText
         );
@@ -182,7 +184,7 @@ export class ElevenLabsService {
       formData.append("agent_id", agentId);
       formData.append("name", name);
       formData.append("url", url);
-      
+
       const response = await fetch(
         `${this.BASE_URL}/convai/agents/${agentId}/add-to-knowledge-base`,
         {
@@ -211,5 +213,18 @@ export class ElevenLabsService {
       );
       throw error;
     }
+  }
+
+  static async fetchConversationAudio(conversationId: string) {
+    const response = await fetch(
+      `${this.BASE_URL}/convai/conversations/${conversationId}/audio`,
+      {
+        headers: {
+          "xi-api-key": `${this.API_KEY}`,
+        },
+      }
+    );
+    console.log(await response.json());
+    return response.blob();
   }
 }

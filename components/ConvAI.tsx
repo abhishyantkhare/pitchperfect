@@ -3,19 +3,19 @@ import { useParams } from "next/navigation";
 import Image from "next/image";
 import { useState, useEffect, useRef } from "react";
 
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { cn } from "@/lib/utils";
-import { Conversation } from "@11labs/client";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Mic, Video, PhoneOff, VideoOff, Circle } from "lucide-react";
 import { useGlobalContext } from "@/app/context/GlobalContext";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
+import { Conversation } from "@11labs/client";
+import { Circle, Video, VideoOff } from "lucide-react";
 import Spinner from "./Spinner";
 
 const avatarImages = [
@@ -69,7 +69,7 @@ type Agent = {
   system_prompt: string | null;
 };
 
-type Timestamp = {
+export type Timestamp = {
   start: number;
   end: number | null;
   conversation_id: string | null;
@@ -197,6 +197,16 @@ export function ConvAI() {
       }, {} as { [key: string]: Conversation | null })
     );
     setLoading(false);
+  }
+
+  async function getHighlights() {
+    await fetch(`/api/presentation/${presentationId}/recording`, {
+      method: "POST",
+      body: JSON.stringify({
+        conversationIds: conversationIds,
+        timestamps: timestamps,
+      }),
+    });
   }
 
   async function updateAgentsWithIntent(
@@ -357,7 +367,7 @@ export function ConvAI() {
       .padStart(2, "0")}:${secs.toString().padStart(2, "0")}.${tenths}`;
   };
 
-  const handleCommand = (action: string) => {
+  const handleCommand = async (action: string) => {
     switch (action) {
       case "start":
         startAllConversations();
@@ -377,8 +387,9 @@ export function ConvAI() {
       case "finish":
         setIsRunning(false);
         currentSpeakerId = null;
-        endConversation();
+        await endConversation();
         setRecordingStatus("finished");
+        await getHighlights();
         break;
     }
   };
@@ -450,6 +461,7 @@ export function ConvAI() {
     for (const participant of participants) {
       const session = sessions[participant.id];
       if (session) {
+        console.log(`ending session for ${participant.name}`);
         await session.endSession();
       }
     }
