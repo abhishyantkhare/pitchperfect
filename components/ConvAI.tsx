@@ -1,14 +1,20 @@
 "use client";
+import { useParams } from "next/navigation";
+import { useState, useEffect, useContext, createContext } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { Conversation } from "@11labs/client";
-import { useState, useEffect, useContext, createContext } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Mic, Video, PhoneOff } from "lucide-react";
-import { useParams } from "next/navigation";
+import { Mic, Video, PhoneOff, VideoOff, Circle } from "lucide-react";
 import { useGlobalContext } from "@/app/context/GlobalContext";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 async function requestMicrophonePermission() {
   try {
@@ -86,6 +92,44 @@ export function ConvAI() {
   const [time, setTime] = useState(0);
   const [isRunning, setIsRunning] = useState(false);
 
+  const [recordingStatus, setRecordingStatus] = useState<
+    "notStarted" | "recording" | "paused" | "finished"
+  >("notStarted");
+
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+
+  const [isVideoOn, setIsVideoOn] = useState(true);
+
+  const toggleVideo = async () => {
+    if (videoRef.current) {
+      if (isVideoOn) {
+        // Turn off the video
+        const stream = videoRef.current.srcObject as MediaStream | null;
+        if (stream) {
+          console.log("Stopping video tracks");
+          stream.getVideoTracks().forEach((track) => track.stop());
+          videoRef.current.srcObject = null;
+        }
+      } else {
+        // Turn on the video
+        try {
+          console.log("Requesting video stream");
+          const stream = await navigator.mediaDevices.getUserMedia({
+            video: true,
+            audio: false, // No audio
+          });
+          console.log("Video stream obtained", stream);
+          videoRef.current.srcObject = stream;
+        } catch (error) {
+          console.error("Error accessing camera:", error);
+        }
+      }
+    } else {
+      console.error("Video element reference is null");
+    }
+    setIsVideoOn((prev) => !prev);
+  };
+
   useEffect(() => {
     console.log(`presentationId:`, presentationId);
     if (presentationId) {
@@ -103,7 +147,21 @@ export function ConvAI() {
       return;
     }
     await updateAgentsWithIntent(id, intent, agents);
-    setParticipants(agents);
+    console.log(
+        `sessions:`,
+        agents.reduce((acc, agent) => {
+          acc[agent.id] = null;
+          return acc;
+        }, {} as { [key: string]: Conversation | null })
+      );
+
+      setParticipants(agents);
+      setSessions(
+        agents.reduce((acc, agent) => {
+          acc[agent.id] = null;
+          return acc;
+        }, {} as { [key: string]: Conversation | null })
+      );
     // setIsLoading(false);
   }
   
@@ -156,6 +214,7 @@ export function ConvAI() {
   }
 
   useEffect(() => {
+    console.log(`currentSpeakerId: ${currentSpeakerId}`);
     if (currentSpeakerId === null) {
       for (const entry of Object.entries(sessions)) {
         const [id, session] = entry;
@@ -182,38 +241,69 @@ export function ConvAI() {
     let interval: NodeJS.Timeout;
     if (isRunning) {
       interval = setInterval(() => {
-        setTime((prevTime) => prevTime + 1);
-      }, 1000);
+        setTime((prevTime) => prevTime + 0.1);
+      }, 100); // Update every 100 milliseconds
     }
     return () => clearInterval(interval);
   }, [isRunning]);
 
+  useEffect(() => {
+    async function startVideoStream() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: false, // No audio
+        });
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+        }
+      } catch (error) {
+        console.error("Error accessing camera:", error);
+      }
+    }
+
+    startVideoStream();
+
+    return () => {
+      if (videoRef.current && videoRef.current.srcObject) {
+        const stream = videoRef.current.srcObject as MediaStream;
+        stream.getTracks().forEach((track) => track.stop());
+      }
+    };
+  }, []);
+
   const formatTime = (seconds: number) => {
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
-    const secs = seconds % 60;
+    const secs = Math.floor(seconds % 60);
+    const tenths = Math.floor((seconds * 10) % 10); // Calculate tenths of a second
     return `${hours.toString().padStart(2, "0")}:${minutes
       .toString()
-      .padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+      .padStart(2, "0")}:${secs.toString().padStart(2, "0")}.${tenths}`;
   };
 
   const handleCommand = (action: string) => {
     switch (action) {
       case "start":
         startAllConversations();
-        currentSpeakerId = "1";
         setIsRunning(true);
+        setRecordingStatus("recording");
         break;
       case "resume":
         setIsRunning(true);
+        currentSpeakerId = null;
+        setRecordingStatus("recording");
         break;
       case "pause":
         setIsRunning(false);
+        currentSpeakerId = null;
+        setRecordingStatus("paused");
         break;
       case "finish":
         setIsRunning(false);
         currentSpeakerId = null;
         endConversation();
+        setRecordingStatus("finished");
         break;
     }
   };
@@ -343,27 +433,66 @@ export function ConvAI() {
       <div className="border-t border-border p-4 flex flex-col sm:flex-row gap-4">
         <Card className="flex-grow bg-card text-card-foreground">
           <CardContent className="p-4 flex items-center gap-4">
-            <div className="aspect-video bg-muted rounded-lg w-40"></div>
+            <div className="aspect-video bg-muted rounded-lg w-40 relative">
+              <video
+                ref={videoRef}
+                autoPlay
+                muted
+                className="w-full h-full object-cover rounded-lg"
+              ></video>
+              {!isVideoOn && (
+                <div className="absolute inset-0 flex items-center justify-center  z-10">
+                  <VideoOff className="h-6 w-6 text-muted-foreground" />
+                </div>
+              )}
+            </div>
             <div>
               <h3 className="font-semibold">Your Video</h3>
               <p className="text-sm text-muted-foreground">You</p>
             </div>
             <div className="ml-auto flex gap-2">
-              <Button size="icon" variant="outline">
-                <Mic className="h-4 w-4" />
-              </Button>
-              <Button size="icon" variant="outline">
-                <Video className="h-4 w-4" />
-              </Button>
-              <Button size="icon" variant="destructive">
-                <PhoneOff className="h-4 w-4" />
-              </Button>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button size="icon" variant="outline" onClick={toggleVideo}>
+                      {isVideoOn ? (
+                        <Video className="h-4 w-4" />
+                      ) : (
+                        <VideoOff className="h-4 w-4" />
+                      )}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Toggle Video</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             </div>
           </CardContent>
         </Card>
         <Card className="w-full sm:w-auto bg-card text-card-foreground">
           <CardContent className="p-4">
-            <div className="text-2xl font-bold mb-2">{formatTime(time)}</div>
+            <div className="flex items-start justify-between">
+              <div className="text-2xl font-bold mb-2">{formatTime(time)}</div>
+              <div
+                className={cn(
+                  "flex items-center rounded-full px-2 py-1",
+                  recordingStatus === "notStarted" && "bg-gray-500",
+                  recordingStatus === "recording" && "bg-red-500 bg-opacity-75",
+                  recordingStatus === "paused" && "bg-blue-500",
+                  recordingStatus === "finished" && "bg-green-500"
+                )}
+              >
+                <Circle className="h-3 w-3 text-white animate-pulse mr-1" />
+                <span className="text-white text-xs font-medium">
+                  {recordingStatus === "notStarted" && "NOT STARTED"}
+                  {recordingStatus === "recording" && "RECORDING"}
+                  {recordingStatus === "paused" && "PAUSED"}
+                  {recordingStatus === "finished" && "FINISHED"}
+                </span>
+              </div>
+            </div>
+
             <div>
               <Button onClick={() => handleCommand("start")} className="m-1">
                 Start
