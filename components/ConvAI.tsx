@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import { Conversation } from "@11labs/client";
 import { useState, useEffect } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Mic, Video, PhoneOff } from "lucide-react";
+import { Mic, Video, PhoneOff, Circle } from "lucide-react";
 import { useParams } from "next/navigation";
 
 async function requestMicrophonePermission() {
@@ -83,6 +83,10 @@ export function ConvAI() {
   const [time, setTime] = useState(0);
   const [isRunning, setIsRunning] = useState(false);
 
+  const [recordingStatus, setRecordingStatus] = useState<
+    "notStarted" | "recording" | "paused" | "finished"
+  >("notStarted");
+
   useEffect(() => {
     console.log(`presentationId:`, presentationId);
     if (presentationId) {
@@ -150,8 +154,8 @@ export function ConvAI() {
     let interval: NodeJS.Timeout;
     if (isRunning) {
       interval = setInterval(() => {
-        setTime((prevTime) => prevTime + 1);
-      }, 1000);
+        setTime((prevTime) => prevTime + 0.1);
+      }, 100); // Update every 100 milliseconds
     }
     return () => clearInterval(interval);
   }, [isRunning]);
@@ -159,10 +163,11 @@ export function ConvAI() {
   const formatTime = (seconds: number) => {
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
-    const secs = seconds % 60;
+    const secs = Math.floor(seconds % 60);
+    const tenths = Math.floor((seconds * 10) % 10); // Calculate tenths of a second
     return `${hours.toString().padStart(2, "0")}:${minutes
       .toString()
-      .padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+      .padStart(2, "0")}:${secs.toString().padStart(2, "0")}.${tenths}`;
   };
 
   const handleCommand = (action: string) => {
@@ -170,17 +175,23 @@ export function ConvAI() {
       case "start":
         startAllConversations();
         setIsRunning(true);
+        setRecordingStatus("recording");
         break;
       case "resume":
         setIsRunning(true);
+        currentSpeakerId = null;
+        setRecordingStatus("recording");
         break;
       case "pause":
         setIsRunning(false);
+        currentSpeakerId = null;
+        setRecordingStatus("paused");
         break;
       case "finish":
         setIsRunning(false);
         currentSpeakerId = null;
         endConversation();
+        setRecordingStatus("finished");
         break;
     }
   };
@@ -330,7 +341,27 @@ export function ConvAI() {
         </Card>
         <Card className="w-full sm:w-auto bg-card text-card-foreground">
           <CardContent className="p-4">
-            <div className="text-2xl font-bold mb-2">{formatTime(time)}</div>
+            <div className="flex items-start justify-between">
+              <div className="text-2xl font-bold mb-2">{formatTime(time)}</div>
+              <div
+                className={cn(
+                  "flex items-center rounded-full px-2 py-1",
+                  recordingStatus === "notStarted" && "bg-gray-500",
+                  recordingStatus === "recording" && "bg-red-500 bg-opacity-75",
+                  recordingStatus === "paused" && "bg-blue-500",
+                  recordingStatus === "finished" && "bg-green-500"
+                )}
+              >
+                <Circle className="h-3 w-3 text-white animate-pulse mr-1" />
+                <span className="text-white text-xs font-medium">
+                  {recordingStatus === "notStarted" && "NOT STARTED"}
+                  {recordingStatus === "recording" && "RECORDING"}
+                  {recordingStatus === "paused" && "PAUSED"}
+                  {recordingStatus === "finished" && "FINISHED"}
+                </span>
+              </div>
+            </div>
+
             <div>
               <Button onClick={() => handleCommand("start")} className="m-1">
                 Start
