@@ -8,6 +8,8 @@ import { zodResponseFormat } from "openai/helpers/zod";
 import os from 'os';
 import path from 'path';
 
+import { ElevenLabsService } from '@/app/api/services/ElevenLabsService';
+import { Timestamp } from '@/components/ConvAI';
 import { createClient } from '@/utils/supabase/server';
 import { TranscriptionSegment } from 'openai/resources/audio/transcriptions.mjs';
 import { z } from "zod";
@@ -74,21 +76,49 @@ async function splitAudioFile(fileData: Blob, weakAreas?: TranscriptionSegment[]
   return clippedFiles;
 }
 
-async function spliceAudioFiles(speakingTimes: any[]) {
+async function spliceAudioFiles(speakingTimes: any[], audioFiles: string[]) {
+  let currStart = 0;
+  // create audio file for first speaking time. we do this because the
+  // first speaking time never has a conversation_id because it's the user speaking
+  const firstSpeakingTime = speakingTimes[0];
+  const firstAudioFile = audioFiles[0];
+  const firstOutputFilePath = path.join(os.tmpdir(), `clip_0.mp3`);
+  await new Promise((resolve, reject) => {
+    ffmpeg(firstAudioFile)
+      .setStartTime(currStart)
+      .setDuration(firstSpeakingTime.end - currStart)
+      .output(firstOutputFilePath)
+      .on('end', resolve)
+      .on('error', reject)
+      .run();
+  });
 
-  for (let i = 0; i < speakingTimes.length; i++) {
+  // create audio files for the rest of the speaking times
+  // each audio file contains the agent speaking + user response
+  let currConversationId: string | null = null;
+  for (let i = 1; i < speakingTimes.length; i++) {
     const speakingTime = speakingTimes[i];
-    const tempFilePath = path.join(os.tmpdir(), `${speakingTime.conversationId}.mp3`);
-    const outputFilePath = path.join(os.tmpdir(), `clip_${i}.mp3`);
-    await new Promise((resolve, reject) => {
+    if (speakingTime.conversation_id) {
+      // this the agent speaking, so we capture the start time
+      currStart = speakingTime.start;
+      currConversationId = speakingTime.conversation_id;
+      continue;
+    }
+    else {
+      // this is the user speaking, so we capture the end time
+      // but save it with the conversation_id of the previous agent
+      const tempFilePath = path.join(os.tmpdir(), `${currConversationId}.mp3`);
+      const outputFilePath = path.join(os.tmpdir(), `clip_${i}.mp3`);
+      await new Promise((resolve, reject) => {
       ffmpeg(tempFilePath)
-        .setStartTime(speakingTime.start)
-        .setDuration(speakingTime.end - speakingTime.start)
+        .setStartTime(currStart)
+        .setDuration(speakingTime.end - currStart)
         .output(outputFilePath)
         .on('end', resolve)
         .on('error', reject)
         .run();
-    }); 
+      }); 
+    }
   }
 
   // Concatenate all the files using ffmpeg
@@ -114,7 +144,10 @@ export async function POST(
     const { id } = await params;
     const presentationId = id;
     const requestData = await request.json();
-    const conversationIds = requestData.conversationIds;
+    const conversationIdDups: string[] = requestData.timestamps.filter((timeStamp: Timestamp) => timeStamp.conversation_id).map((timeStamp: Timestamp) =>  timeStamp.conversation_id);
+
+    // Remove duplicates
+    const conversationIds: string[] = [...new Set(conversationIdDups)];
 
     if (!presentationId) {
       return NextResponse.json(
@@ -124,20 +157,19 @@ export async function POST(
     }
 
     // fetch all audio files from elevenlabs
-    const audioFiles: Blob[] = await Promise.all(conversationIds.map(async (conversationId: string) => {
-      const response = await fetch(`https://api.us.elevenlabs.io/v1/convai/conversations/${conversationId}/audio`);
-      if (!response.ok) {
-        throw new Error(`Failed to fetch audio for conversation ${conversationId}`);
-      }
-      const fileData = await response.blob();
+    const audioFiles= await Promise.all(conversationIds.map(async (conversationId: string) => {
+
+      const fileData = await ElevenLabsService.fetchConversationAudio(conversationId);
+      console.log(fileData);
       const buffer = Buffer.from(await fileData.arrayBuffer());
       const outputFilePath = path.join(os.tmpdir(), `${conversationId}.mp3`);
-      fs.writeFileSync(outputFilePath, buffer);
-      return fileData;
+      await fs.writeFileSync(outputFilePath, buffer);
+      return outputFilePath;
     }));
 
+
     // splice the audio files
-    await spliceAudioFiles(requestData.speakingTimes);
+    await spliceAudioFiles(requestData.timestamps, audioFiles);
 
     
 

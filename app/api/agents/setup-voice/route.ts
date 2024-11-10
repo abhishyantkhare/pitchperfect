@@ -3,9 +3,9 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
 import { ElevenLabsService } from "../../services/ElevenLabsService";
 import {
-  elevenLabsSystemPrompt,
-  elevenLabsSystemPromptWithIntent,
-  getPresentationPreSignedUrls,
+    elevenLabsSystemPrompt,
+    elevenLabsSystemPromptWithIntent,
+    getPresentationPreSignedUrls,
 } from "./utils";
 
 export async function POST(request: Request) {
@@ -16,7 +16,7 @@ export async function POST(request: Request) {
     const supabase = await createClient();
 
     // Create the voice preview in ElevenLabs
-    const text = "This is a sample text to generate a voice...";
+    const text = "Hello! I'm excited to demonstrate my voice capabilities. I can speak clearly and naturally, with proper intonation and emphasis. This sample will help generate a high-quality voice preview.";
     const elevenLabsVoiceData = await ElevenLabsService.createVoicePreview(
       voiceDescription,
       text
