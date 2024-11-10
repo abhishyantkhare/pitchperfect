@@ -104,13 +104,24 @@ export default function Component() {
         return;
       }
 
-      const urls = files.map((file) => {
-        const { data: fileData } = supabase.storage
-          .from(SUPABASE_BUCKET_NAME)
-          .getPublicUrl(`${hardCoded}/weak_area_clips/${file.name}`);
+      const urls = await Promise.all(
+        files.map(async (file) => {
+          const { data: signedUrlData, error: signedUrlError } =
+            await supabase.storage
+              .from(SUPABASE_BUCKET_NAME)
+              .createSignedUrl(
+                `${hardCoded}/weak_area_clips/${file.name}`,
+                600
+              ); // 600 seconds expiration
 
-        return fileData.publicUrl;
-      });
+          if (signedUrlError) {
+            console.error('Error creating signed URL:', signedUrlError);
+            return '';
+          }
+
+          return signedUrlData.signedUrl;
+        })
+      );
 
       console.log('urls', urls);
 
