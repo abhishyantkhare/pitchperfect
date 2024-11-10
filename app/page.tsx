@@ -1,7 +1,8 @@
 "use client";
 import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useGlobalContext } from "./context/GlobalContext";
 
 export default function Home() {
   const router = useRouter();
@@ -9,6 +10,8 @@ export default function Home() {
   const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
   const [topic, setTopic] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+
+  const { setIntent } = useGlobalContext();
 
   const handleUploadClick = () => {
     if (fileInputRef.current) {
@@ -40,10 +43,11 @@ export default function Home() {
   const handleCreatePresentation = async () => {
     if (!topic.trim()) {
       // You might want to show an error message to the user here
+      console.error("No topic provided", topic);
       return;
     }
-
     setIsLoading(true);
+    setIntent(topic);
     try {
       const formData = new FormData();
       formData.append("topic", topic);
@@ -67,6 +71,10 @@ export default function Home() {
       setIsLoading(false);
     }
   };
+
+  useEffect(() => {
+    setIntent("");
+  }, []);
 
   return (
     <div className="min-h-screen bg-black text-white font-[family-name:var(--font-geist-sans)] w-screen">
