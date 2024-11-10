@@ -106,13 +106,7 @@ export function ConvAI() {
 
   const [isVideoOn, setIsVideoOn] = useState(true);
 
-  const [timestamps, setTimestamps] = useState<Timestamp[]>([
-    {
-      start: 0,
-      end: null,
-      conversation_id: null,
-    },
-  ]);
+  const [timestamps, setTimestamps] = useState<Timestamp[]>([]);
   const [previousSpeakerId, setPreviousSpeakerId] = useState<string | null>(
     null
   );
@@ -309,33 +303,32 @@ export function ConvAI() {
       let currTime = time;
 
       // Add an end timestamp for the previous speaker
-      let endTimestamp = null;
-      if (timestamps.length > 0) {
-        endTimestamp = {
-          start: timestamps[timestamps.length - 1]?.start || 0,
-          end: currTime,
-          conversation_id:
-            timestamps[timestamps.length - 1]?.conversation_id ?? null,
-        };
+      if (timestamps.length === 0) {
+        setTimestamps([
+          {
+            start: 0,
+            end: currTime,
+            conversation_id: previousSpeakerId
+              ? sessions[previousSpeakerId]?.getId() ?? null
+              : null,
+          },
+        ]);
+      } else {
+        const prevEnd = timestamps[timestamps.length - 1];
+        setTimestamps((prev) => [
+          ...prev,
+          {
+            start: prevEnd.end ?? 0,
+            end: currTime,
+            conversation_id: previousSpeakerId
+              ? sessions[previousSpeakerId]?.getId() ?? null
+              : null,
+          },
+        ]);
       }
-
-      // Add a start timestamp for the new speaker
-      const startTimestamp = {
-        start: timestamps.length === 0 ? 0 : currTime,
-        end: null, // Placeholder, will be updated when the speaker changes again
-        conversation_id: currId ? sessions[currId]?.getId() ?? null : null,
-      };
-      setTimestamps((prev) => {
-        const newTimestamps = [...prev];
-        if (endTimestamp) {
-          newTimestamps[newTimestamps.length - 1] = endTimestamp;
-        }
-        newTimestamps.push(startTimestamp);
-        return newTimestamps;
-      });
       setPreviousSpeakerId(currId);
     }
-  }, [currentSpeakerId, time, sessions, timestamps]);
+  }, [currentSpeakerId]);
 
   const formatTime = (seconds: number) => {
     const hours = Math.floor(seconds / 3600);
@@ -437,16 +430,6 @@ export function ConvAI() {
   }
 
   async function endConversation() {
-    // Add the final timestamp
-    const finalTimestamp = {
-      start: timestamps[timestamps.length - 1]?.start || 0,
-      end: time,
-      conversation_id:
-        timestamps[timestamps.length - 1]?.conversation_id ?? null,
-    };
-    setTimestamps((prev) => [...prev.slice(0, -1), finalTimestamp]);
-    console.log("Final Timestamp Added:", finalTimestamp);
-
     for (const participant of participants) {
       const session = sessions[participant.id];
       if (session) {
