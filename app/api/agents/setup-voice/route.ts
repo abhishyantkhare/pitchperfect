@@ -161,26 +161,27 @@ export async function PATCH(request: Request) {
     const { agentId, presentationId, intent } = body;
 
     const agent = await supabase
-    .from("agents")
-    .select("elevenlabs_id, system_prompt")
-    .eq("id", agentId)
-    .single();
-  if (agent.error) {
-    console.error(
-      "/api/agents/setup-voice/::PATCH:error: error fetching agent:",
-      agent.error
-    );
-    return NextResponse.json(
-      { error: "Failed to fetch agent" },
-      { status: 500 }
-    );
-  }
+      .from("agents")
+      .select("elevenlabs_id, system_prompt")
+      .eq("id", agentId)
+      .single();
+    if (agent.error) {
+      console.error(
+        "/api/agents/setup-voice/::PATCH:error: error fetching agent:",
+        agent.error
+      );
+      return NextResponse.json(
+        { error: "Failed to fetch agent" },
+        { status: 500 }
+      );
+    }
 
-  const { elevenlabs_id: elevenLabsAgentId, system_prompt: systemPrompt } =
+    const { elevenlabs_id: elevenLabsAgentId, system_prompt: systemPrompt } =
       agent.data;
 
     const SUPABASE_BUCKET_NAME = "pitchperfectfiles";
-    // Example usage
+
+    // Get all presigned urls for files uploaded to Supabase for the specific presentationId
     const allKnowledgeSupabasePreSignedUrls =
       await getPresentationPreSignedUrls(
         supabase,
@@ -188,6 +189,7 @@ export async function PATCH(request: Request) {
         SUPABASE_BUCKET_NAME
       );
 
+    // Upload all of those files to the ElevenLabs firebase knowledge base
     let allKnowledgeBaseIds: {
       type: string;
       id: string;
@@ -196,18 +198,22 @@ export async function PATCH(request: Request) {
     if (allKnowledgeSupabasePreSignedUrls) {
       allKnowledgeBaseIds = await Promise.all(
         allKnowledgeSupabasePreSignedUrls
-          .filter((url): url is string => url !== undefined) // Filter out undefined values
-          .map(async (url: string) => {
+          .filter(
+            (data): data is { fileName: string; signedUrl: string } =>
+              data !== undefined
+          ) // Filter out undefined values
+          .map(async (data: { fileName: string; signedUrl: string }) => {
+            const { fileName, signedUrl } = data;
             const result = await ElevenLabsService.createKnowledgeBase(
               elevenLabsAgentId,
-              url,
-              url
+              fileName,
+              signedUrl
             );
             const firebaseId = result.id;
             return {
               type: "url",
               id: firebaseId,
-              name: url,
+              name: fileName,
             };
           })
       );
@@ -219,6 +225,7 @@ export async function PATCH(request: Request) {
     );
     const { conversation_config } = elevenLabsAgentResult;
 
+    // Append the intent to the system prompt
     const newSystemPromptWithIntent = elevenLabsSystemPromptWithIntent(
       systemPrompt,
       intent
@@ -279,10 +286,7 @@ export async function PATCH(request: Request) {
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error(
-      "/api/agents/setup-voice/::PATCH:error:",
-      error
-    );
+    console.error("/api/agents/setup-voice/::PATCH:error:", error);
 
     return NextResponse.json(
       { error: "Internal server error" },
