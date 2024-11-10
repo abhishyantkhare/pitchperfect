@@ -111,6 +111,7 @@ export function ConvAI() {
   const [sessions, setSessions] = useState<{
     [key: string]: Conversation | null;
   }>({});
+  const [avatarImages, setAvatarImages] = useState<string[]>([]);
 
   const [time, setTime] = useState(0);
   const [isRunning, setIsRunning] = useState(false);
@@ -196,6 +197,7 @@ export function ConvAI() {
         return acc;
       }, {} as { [key: string]: Conversation | null })
     );
+    setAvatarImages(agents.map((_) => getRandomAvatar()));
     setLoading(false);
   }
 
@@ -496,7 +498,7 @@ export function ConvAI() {
           className="flex gap-4 justify-center items-center h-full"
           style={{ height: "100%" }}
         >
-          {participants.map((participant) => (
+          {participants.map((participant, index) => (
             <Card
               key={participant.id}
               className={cn(
@@ -507,13 +509,13 @@ export function ConvAI() {
               <CardContent className="p-4">
                 <div className="aspect-video bg-muted rounded-lg flex justify-center items-center mb-2">
                   <Image
-                    src={getRandomAvatar()}
+                    src={avatarImages[index]}
                     alt="avatar"
                     width={100}
                     height={100}
                     className="w-[75%] h-[50%]"
                   />
-</div>
+                </div>
                 <div className="flex items-center gap-2">
                   <Avatar>
                     <AvatarImage
