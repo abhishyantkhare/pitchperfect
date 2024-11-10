@@ -283,6 +283,16 @@ export async function PATCH(request: Request) {
         },
       }
     );
+    if (!elevenLabsFetchAgentResponse.ok) {
+      console.error(
+        `updateAgentsWithIntent::error:Failed to fetch agent: ${elevenLabsFetchAgentResponse.statusText}`
+      );
+      console.error(
+        `updateAgentsWithIntent::error:body:`,
+        await elevenLabsFetchAgentResponse.json()
+      );
+      return NextResponse.json({ error: "Failed to fetch agent" }, { status: 500 });
+    }
 
     const elevenLabsAgentResult: ElevenLabsAgentResult =
       await elevenLabsFetchAgentResponse.json();
@@ -344,9 +354,7 @@ export async function PATCH(request: Request) {
     // Update the agent in Supabase with the voice details
     const { error: updateError } = await supabase
       .from("agents")
-      .update({
-        persona:
-          elevenLabsUpdateAgentResult.conversation_config.agent.prompt.prompt,
+      .update({        
         knowledge:
           elevenLabsUpdateAgentResult.conversation_config.agent.prompt
             .knowledge_base,

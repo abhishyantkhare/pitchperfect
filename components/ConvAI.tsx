@@ -4,10 +4,11 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { Conversation } from "@11labs/client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useContext, createContext } from "react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Mic, Video, PhoneOff } from "lucide-react";
 import { useParams } from "next/navigation";
+import { useGlobalContext } from "@/app/context/GlobalContext";
 
 async function requestMicrophonePermission() {
   try {
@@ -71,7 +72,9 @@ function queueUpdate(updateFunction: () => void) {
   }
 }
 
+
 export function ConvAI() {
+  const { intent } = useGlobalContext();
   const { presentationId } = useParams<{ presentationId: string }>();
   const [presentationData, setPresentationData] = useState<any>(null);
 
@@ -86,9 +89,53 @@ export function ConvAI() {
   useEffect(() => {
     console.log(`presentationId:`, presentationId);
     if (presentationId) {
-      fetchPresentationData(presentationId);
+      prepareAgents(presentationId);
+      console.log(`participants:`, participants);
     }
   }, [presentationId]);
+
+  async function prepareAgents(id: string) {
+        // setIsLoading(true);
+    const agents = await fetchPresentationData(id);
+    console.log(`agents:`, agents);
+    if (!agents) {
+      console.error("could not fetch and prepare agents");
+      return;
+    }
+    await updateAgentsWithIntent(id, intent, agents);
+    setParticipants(agents);
+    // setIsLoading(false);
+  }
+  
+  async function updateAgentsWithIntent(id: string, intent: string, agents: Agent[]) {
+    console.log(`updateAgentsWithIntent::id:`, id);
+    console.log(`updateAgentsWithIntent::intent:`, intent);
+
+    await Promise.all(agents.map(async (agent) => {
+      try {
+        const { id: agentId } = agent;
+        const body = {
+          intent,
+          agentId,
+          presentationId: id
+        }
+        const response = await fetch(`/api/agents/setup-voice`, {
+          method: "PATCH",
+          body: JSON.stringify(body),
+        });
+        if (!response.ok) {
+          console.error(
+            `Failed to update agents with intent: ${response.statusText}`
+          );
+          throw new Error("Failed to update agents with intent");
+        }
+        const result = await response.json();
+        console.log(`updateAgentsWithIntent::result:`, result);
+      } catch (error) {
+        console.error(`updateAgentsWithIntent::error:`, error);
+      }
+    }));
+  }
 
   async function fetchPresentationData(id: string) {
     console.log(`fetchPresentationData:`, id);
@@ -102,9 +149,7 @@ export function ConvAI() {
       }
       const agents = (await response.json()) as Agent[];
       console.log(`agents:`, agents);
-
-      setParticipants(agents);
-      console.log(`participants:`, participants);
+      return agents
     } catch (error) {
       console.error("Error fetching presentation data:", error);
     }
