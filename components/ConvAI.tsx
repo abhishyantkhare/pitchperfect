@@ -15,6 +15,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import Spinner from "./Spinner";
 
 async function requestMicrophonePermission() {
   try {
@@ -88,7 +89,7 @@ export function ConvAI() {
   const { intent } = useGlobalContext();
   const { presentationId } = useParams<{ presentationId: string }>();
   const [presentationData, setPresentationData] = useState<any>(null);
-
+  const [loading, setLoading] = useState(false);
   const [participants, setParticipants] = useState<Agent[]>([]);
   const [sessions, setSessions] = useState<{
     [key: string]: Conversation | null;
@@ -161,7 +162,7 @@ export function ConvAI() {
   }, [presentationId]);
 
   async function prepareAgents(id: string) {
-    // setIsLoading(true);
+    setLoading(true);
     const agents = await fetchPresentationData(id);
     console.log(`agents:`, agents);
     if (!agents) {
@@ -184,7 +185,7 @@ export function ConvAI() {
         return acc;
       }, {} as { [key: string]: Conversation | null })
     );
-    // setIsLoading(false);
+    setLoading(false);
   }
 
   async function updateAgentsWithIntent(
@@ -290,7 +291,9 @@ export function ConvAI() {
       }
     }
 
-    startVideoStream();
+    if (!loading) {
+      startVideoStream();
+    }
 
     return () => {
       if (videoRef.current && videoRef.current.srcObject) {
@@ -298,7 +301,7 @@ export function ConvAI() {
         stream.getTracks().forEach((track) => track.stop());
       }
     };
-  }, []);
+  }, [loading]);
 
   useEffect(() => {
     if (currentSpeakerId !== previousSpeakerId) {
@@ -461,6 +464,16 @@ export function ConvAI() {
         ...participant,
         speaking: false,
       }))
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background text-foreground flex flex-col dark">
+        <main className="flex flex-grow p-4 overflow-auto  h-full items-center justify-center">
+          <Spinner />
+        </main>
+      </div>
     );
   }
 
