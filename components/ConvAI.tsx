@@ -118,7 +118,7 @@ export function ConvAI() {
   const [isRunning, setIsRunning] = useState(false);
 
   const [recordingStatus, setRecordingStatus] = useState<
-    'notStarted' | 'recording' | 'paused' | 'finished'
+    'notStarted' | 'recording' | 'paused' | 'finished' | 'processing'
   >('notStarted');
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
@@ -392,6 +392,9 @@ export function ConvAI() {
         currentSpeakerId = null;
         await endConversation();
         setRecordingStatus('finished');
+        break;
+      case 'process':
+        setRecordingStatus('processing');
         await getHighlights();
         router.push(`/highlights/${presentationId}`);
         break;
@@ -592,32 +595,69 @@ export function ConvAI() {
                   recordingStatus === 'notStarted' && 'bg-gray-500',
                   recordingStatus === 'recording' && 'bg-red-500 bg-opacity-75',
                   recordingStatus === 'paused' && 'bg-blue-500',
-                  recordingStatus === 'finished' && 'bg-green-500'
+                  recordingStatus === 'finished' && 'bg-green-500',
+                  recordingStatus === 'processing' && 'bg-emerald-800'
                 )}
               >
-                <Circle className="h-3 w-3 text-white animate-pulse mr-1" />
+                {recordingStatus === 'processing' ? (
+                  <div className="flex items-center h-4 w-4">
+                    <Spinner className=" text-white animate-spin mr-1" />
+                  </div>
+                ) : (
+                  <Circle className="h-3 w-3 text-white animate-pulse mr-1" />
+                )}
                 <span className="text-white text-xs font-medium">
                   {recordingStatus === 'notStarted' && 'NOT STARTED'}
                   {recordingStatus === 'recording' && 'RECORDING'}
                   {recordingStatus === 'paused' && 'PAUSED'}
                   {recordingStatus === 'finished' && 'FINISHED'}
+                  {recordingStatus === 'processing' && 'PROCESSING'}
                 </span>
               </div>
             </div>
 
             <div>
-              <Button onClick={() => handleCommand('start')} className="m-1">
+              <Button
+                onClick={() => handleCommand('start')}
+                className="m-1"
+                disabled={recordingStatus !== 'notStarted'}
+              >
                 Start
               </Button>
-              <Button onClick={() => handleCommand('pause')} className="m-1">
+              <Button
+                onClick={() => handleCommand('pause')}
+                className="m-1"
+                disabled={recordingStatus !== 'recording'}
+              >
                 Pause
               </Button>
-              <Button onClick={() => handleCommand('resume')} className="m-1">
+              <Button
+                onClick={() => handleCommand('resume')}
+                className="m-1"
+                disabled={recordingStatus !== 'paused'}
+              >
                 Resume
               </Button>
-              <Button onClick={() => handleCommand('finish')} className="m-1">
-                Finish
-              </Button>
+              {recordingStatus === 'finished' ? (
+                <Button
+                  onClick={() => handleCommand('process')}
+                  className="m-1 bg-emerald-700 text-white hover:text-black hover:bg-emerald-200"
+                  disabled={recordingStatus !== 'finished'}
+                >
+                  Process
+                </Button>
+              ) : (
+                <Button
+                  onClick={() => handleCommand('finish')}
+                  className="m-1 "
+                  disabled={
+                    recordingStatus !== 'recording' &&
+                    recordingStatus !== 'paused'
+                  }
+                >
+                  Finish
+                </Button>
+              )}
             </div>
           </CardContent>
         </Card>
