@@ -1,31 +1,16 @@
 import { NextResponse } from "next/server";
+import { ElevenLabsService } from "../services/ElevenLabsService";
 
-export async function GET() {
-  const agentId = process.env.AGENT_ID;
-  const apiKey = process.env.ELEVENLABS_API_KEY;
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const agentId = searchParams.get("agentId");
   if (!agentId) {
-    throw Error("AGENT_ID is not set");
+    return NextResponse.json({ error: "Agent ID is required" }, { status: 400 });
   }
-  if (!apiKey) {
-    throw Error("ELEVENLABS_API_KEY is not set");
-  }
+  
   try {
-    const response = await fetch(
-      `https://api.elevenlabs.io/v1/convai/conversation/get_signed_url?agent_id=${agentId}`,
-      {
-        method: "GET",
-        headers: {
-          "xi-api-key": apiKey,
-        },
-      }
-    );
-
-    if (!response.ok) {
-      throw new Error("Failed to get signed URL");
-    }
-
-    const data = await response.json();
-    return NextResponse.json({ signedUrl: data.signed_url });
+    const signedUrl = await ElevenLabsService.getSignedUrl(agentId);
+    return NextResponse.json({ signedUrl });
   } catch (error) {
     console.error("Error:", error);
     return NextResponse.json(

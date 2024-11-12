@@ -84,10 +84,17 @@ export async function POST(request: Request) {
       presentation_id: presentationId,
       agent_id: agentId,
     }));
+    console.log("presentationAgents >>>", presentationAgents);
 
-    const { error: insertError } = await supabase
-      .from('presentation_agents')
-      .insert(presentationAgents);
+    const {
+      data,
+      error: insertError,
+      status,
+      statusText,
+    } = await supabase
+      .from("presentations_agents")
+      .insert(presentationAgents)
+      .select();
 
     if (insertError) {
       console.error('Error creating presentation agents:', insertError);

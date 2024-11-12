@@ -35,7 +35,7 @@ export async function GET(request: Request) {
   }
   // Fetch the related presentation_agents
   const { data: presentationAgents, error: agentsError } = await supabase
-    .from("presentation_agents")
+    .from("presentations_agents")
     .select("*")
     .eq("presentation_id", id);
 
