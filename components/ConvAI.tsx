@@ -218,33 +218,6 @@ export function ConvAI() {
     setLoading(false);
   }
 
-  async function getHighlights() {
-    try {
-      const audioBlob = new Blob(recordedChunks, { type: "audio/mp3" });
-      const formData = new FormData();
-      formData.append("audio", audioBlob, "recording.mp3");
-
-      const response = await fetch(
-        `/api/presentation/${presentationId}/recording`,
-        {
-          method: "POST",
-          // Don't set Content-Type header - browser will set it automatically
-          body: formData,
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error(`Failed to get highlights: ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      console.log("Highlights data:", data);
-      return data;
-    } catch (error) {
-      console.error("Error getting highlights:", error);
-    }
-  }
-
   async function updateAgentsWithIntent(
     id: string,
     intent: string,
@@ -440,6 +413,8 @@ export function ConvAI() {
 
   const uploadFinalRecording = async () => {
     try {
+      // Add a 5 second delay before proceeding with upload
+      await new Promise((resolve) => setTimeout(resolve, 5000));
       // Create a single blob from all recorded chunks
       const audioBlob = new Blob(recordedChunks, { type: "audio/mp3" });
       const formData = new FormData();
@@ -463,6 +438,7 @@ export function ConvAI() {
 
       // Clear the recorded chunks after successful upload
       setRecordedChunks([]);
+      router.push(`/highlights/${presentationId}`);
     } catch (error) {
       console.error("Error uploading final recording:", error);
     }

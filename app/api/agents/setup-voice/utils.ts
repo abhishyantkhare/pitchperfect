@@ -22,6 +22,8 @@ export const elevenLabsSystemPrompt = (
   <persona>
   ${persona}
   </persona>
+
+  Only ask one question at a time.
   `;
 
 export const elevenLabsSystemPromptWithIntent = (

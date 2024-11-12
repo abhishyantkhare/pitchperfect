@@ -1,14 +1,14 @@
-'use client';
+"use client";
 
-import { useState, useEffect } from 'react';
-import { useParams } from 'next/navigation';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Separator } from '@/components/ui/separator';
-import { supabaseClient as supabase } from '@/utils/supabase/client';
-import Spinner from '@/components/Spinner';
+import Spinner from "@/components/Spinner";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Separator } from "@/components/ui/separator";
+import { supabaseClient as supabase } from "@/utils/supabase/client";
+import { useParams } from "next/navigation";
+import { useEffect, useState } from "react";
 
-const SUPABASE_BUCKET_NAME = 'pitchperfectfiles';
+const SUPABASE_BUCKET_NAME = "pitchperfectfiles";
 
 // Define a type for the presentation data
 type PresentationData = {
@@ -21,7 +21,7 @@ type PresentationData = {
 
 // This is a mock function to simulate fetching data from the server
 const fetchPresentationData = async (presentationId: string) => {
-  console.log('fetching presentation data for presentationId:', presentationId);
+  console.log("fetching presentation data for presentationId:", presentationId);
   try {
     // const response = await fetch(
     //   `/api/presentation/${presentationId}/recording`,
@@ -49,32 +49,42 @@ const fetchPresentationData = async (presentationId: string) => {
     //   })),
     // };
     return {
-      presentationTitle: 'Effective Public Speaking Techniques', // Assuming the title is static or fetched elsewhere
+      presentationTitle: "Effective Public Speaking Techniques", // Assuming the title is static or fetched elsewhere
       weak_areas: [],
     };
   } catch (error) {
-    console.error('Error fetching presentation data:', error);
+    console.error("Error fetching presentation data:", error);
     return null;
   }
 };
 
 // Function to generate feedback based on index
-const getFeedbackForIndex = (index: number): string => {
-  const feedbackOptions = [
-    'Great job on maintaining eye contact with the audience!',
-    'Consider using more visuals to support your points.',
-    'Your pacing was excellent, but try to vary your tone for emphasis.',
-    'The introduction was strong, but the conclusion could be more impactful.',
-    'Try to engage the audience with questions or interactive elements.',
-    'Your content was well-organized, but ensure to highlight key takeaways.',
-    'Consider reducing filler words to make your speech more concise.',
-    'Your enthusiasm was contagious, keep it up!',
-    'The examples you used were relevant and helped clarify your points.',
-    'Try to incorporate more storytelling to make your presentation memorable.',
-  ];
+const getFeedbackForIndex = (
+  feedbackOptions: [],
+  presentationId: string,
+  index: number
+) => {
+  // const feedbackOptions = [
+  //   "Great job on maintaining eye contact with the audience!",
+  //   "Consider using more visuals to support your points.",
+  //   "Your pacing was excellent, but try to vary your tone for emphasis.",
+  //   "The introduction was strong, but the conclusion could be more impactful.",
+  //   "Try to engage the audience with questions or interactive elements.",
+  //   "Your content was well-organized, but ensure to highlight key takeaways.",
+  //   "Consider reducing filler words to make your speech more concise.",
+  //   "Your enthusiasm was contagious, keep it up!",
+  //   "The examples you used were relevant and helped clarify your points.",
+  //   "Try to incorporate more storytelling to make your presentation memorable.",
+  // ];
 
-  // Use modulo to cycle through feedback options if index exceeds the array length
-  return feedbackOptions[index % feedbackOptions.length];
+  for (const area of feedbackOptions || []) {
+    console.log("area", area);
+    if (index === area?.id) {
+      return area?.explanation;
+    }
+    console.log(area);
+  }
+  console.log("presentationId", presentationId);
 };
 
 export default function Component() {
@@ -84,6 +94,7 @@ export default function Component() {
   const [presentationData, setPresentationData] =
     useState<PresentationData | null>(null);
   const [audioUrls, setAudioUrls] = useState<string[]>([]);
+  const [feedbackOptions, setFeedbackOptions] = useState<[]>([]);
 
   useEffect(() => {
     if (!presentationId) return; // Ensure presentationId is available
@@ -93,14 +104,23 @@ export default function Component() {
       setPresentationData(data);
       if (!data) return;
 
-      const hardCoded = `3bb61b90-6f71-46b4-9627-062840206dad`;
+      const hardCoded = presentationId;
       const { data: files, error } = await supabase.storage
         .from(SUPABASE_BUCKET_NAME)
-        .list(`${hardCoded}/weak_area_clips/`);
+        .list(`${hardCoded}/weak_areas/`);
 
-      console.log('files', files);
+      const presentationData = await supabase
+        .from("presentations")
+        .select("weak_areas")
+        .eq("id", presentationId);
+
+      setFeedbackOptions(presentationData?.data?.[0].weak_areas || []);
+
+      console.log("presentationData", presentationData);
+
+      console.log("files", files);
       if (error) {
-        console.error('Error listing files:', error);
+        console.error("Error listing files:", error);
         return;
       }
 
@@ -109,21 +129,18 @@ export default function Component() {
           const { data: signedUrlData, error: signedUrlError } =
             await supabase.storage
               .from(SUPABASE_BUCKET_NAME)
-              .createSignedUrl(
-                `${hardCoded}/weak_area_clips/${file.name}`,
-                600
-              ); // 600 seconds expiration
+              .createSignedUrl(`${hardCoded}/weak_areas/${file.name}`, 600); // 600 seconds expiration
 
           if (signedUrlError) {
-            console.error('Error creating signed URL:', signedUrlError);
-            return '';
+            console.error("Error creating signed URL:", signedUrlError);
+            return "";
           }
 
           return signedUrlData.signedUrl;
         })
       );
 
-      console.log('urls', urls);
+      console.log("urls", urls);
 
       setAudioUrls(urls);
     };
@@ -188,7 +205,11 @@ export default function Component() {
                       )}
                     </div>
                     <p className="text-sm md:text-base text-gray-300">
-                      {getFeedbackForIndex(index)}
+                      {getFeedbackForIndex(
+                        feedbackOptions,
+                        presentationId,
+                        index
+                      )}
                     </p>
                   </div>
                 </div>
@@ -211,7 +232,11 @@ export default function Component() {
                       )}
                     </div>
                     <p className="text-sm md:text-base text-gray-300">
-                      {getFeedbackForIndex(index)}
+                      {getFeedbackForIndex(
+                        feedbackOptions,
+                        presentationId,
+                        index
+                      )}
                     </p>
                   </div>
                 </div>

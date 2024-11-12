@@ -18,7 +18,7 @@ export async function POST(request: Request) {
     // Create the voice preview in ElevenLabs
     const text = "Hello! I'm excited to demonstrate my voice capabilities. I can speak clearly and naturally, with proper intonation and emphasis. This sample will help generate a high-quality voice preview.";
     const elevenLabsVoiceData = await ElevenLabsService.createVoicePreview(
-      voiceDescription,
+      voiceDescription + ". They only ask one question at a time.",
       text
     );
 

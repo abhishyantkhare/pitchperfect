@@ -54,7 +54,7 @@ async function createHighlightClips(
   try {
     // Create clips for each weak area
     const clips = await Promise.all(
-      weakAreas.map(async (segment, index) => {
+      weakAreas.filter((segment) => segment).map(async (segment, index) => {
         const startTime = segment.start;
         const duration = segment.end - segment.start;
         const outputFileName = `clip_${index}.mp3`;

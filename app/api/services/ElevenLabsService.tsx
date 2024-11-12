@@ -184,6 +184,7 @@ export class ElevenLabsService {
       formData.append("agent_id", agentId);
       formData.append("name", name);
       formData.append("url", url);
+      console.log("api key", this.API_KEY);
 
       const response = await fetch(
         `${this.BASE_URL}/convai/agents/${agentId}/add-to-knowledge-base`,
