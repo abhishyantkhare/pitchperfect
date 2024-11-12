@@ -77,7 +77,21 @@ export type Timestamp = {
 
 let updateQueue: (() => void)[] = [];
 let isProcessingQueue = false;
+
+// Note that if currentSpeakerId is null, the user is speaking
 let currentSpeakerId: string | null = null;
+let previousSpeakerId: string | null = null;
+
+// The order of agents that have spoken
+let agentSpeakingCycle: string[] = [];
+const getAgentIdWithMostTurns = () => {
+  return agentSpeakingCycle.reduce((prev, curr) => {
+    return agentSpeakingCycle.filter((id) => id === curr).length >
+      agentSpeakingCycle.filter((id) => id === prev).length
+      ? curr
+      : prev;
+  }, agentSpeakingCycle[0]);
+};
 
 function processQueue() {
   if (isProcessingQueue || updateQueue.length === 0) return;
@@ -126,9 +140,6 @@ export function ConvAI() {
   const [isVideoOn, setIsVideoOn] = useState(true);
 
   const [timestamps, setTimestamps] = useState<Timestamp[]>([]);
-  const [previousSpeakerId, setPreviousSpeakerId] = useState<string | null>(
-    null
-  );
 
   useEffect(() => {
     console.log('timestamps: ', timestamps);
@@ -170,7 +181,7 @@ export function ConvAI() {
     console.log(`presentationId:`, presentationId);
     if (presentationId) {
       prepareAgents(presentationId);
-      console.log(`participants:`, participants);
+      // console.log(`participants:`, participants);
     }
   }, [presentationId]);
 
@@ -272,7 +283,7 @@ export function ConvAI() {
       for (const entry of Object.entries(sessions)) {
         const [id, session] = entry;
         if (session) {
-          console.log(`setting volume to 0 for ${id}`);
+          // console.log(`setting volume to 0 for ${id}`);
           session.setVolume({ volume: 0 });
         }
       }
@@ -280,10 +291,10 @@ export function ConvAI() {
       for (const entry of Object.entries(sessions)) {
         const [id, session] = entry;
         if (id === currentSpeakerId) {
-          console.log(`setting volume to 0.5 for ${id}`);
+          // console.log(`setting volume to 0.5 for ${id}`);
           session?.setVolume({ volume: 0.5 });
         } else {
-          console.log(`setting volume to 0 for ${id}`);
+          // console.log(`setting volume to 0 for ${id}`);
           session?.setVolume({ volume: 0 });
         }
       }
@@ -340,7 +351,7 @@ export function ConvAI() {
             end: currTime,
             conversation_id: previousSpeakerId
               ? sessions[previousSpeakerId]?.getId() ?? null
-              : null,
+              : 'user',
           },
         ]);
       } else {
@@ -352,11 +363,11 @@ export function ConvAI() {
             end: currTime,
             conversation_id: previousSpeakerId
               ? sessions[previousSpeakerId]?.getId() ?? null
-              : null,
+              : 'user',
           },
         ]);
       }
-      setPreviousSpeakerId(currId);
+      previousSpeakerId = currId;
     }
   }, [currentSpeakerId]);
 
@@ -425,7 +436,15 @@ export function ConvAI() {
           onModeChange: ({ mode }) => {
             if (mode === 'speaking') {
               if (currentSpeakerId === null) {
-                currentSpeakerId = participant.id;
+                // Only hold the conch if there are no agents in the cycle or the current agent is not the one with the most turns
+                if (
+                  agentSpeakingCycle.length === 0 ||
+                  getAgentIdWithMostTurns() !== participant.id ||
+                  participants.length === 1
+                ) {
+                  currentSpeakerId = participant.id;
+                  agentSpeakingCycle.push(participant.id);
+                }
               }
             } else {
               if (currentSpeakerId === participant.id) {
@@ -452,6 +471,9 @@ export function ConvAI() {
       });
       return newSessions;
     });
+
+    // Add all the agent ids to the agentSpeakingCycle (fair chance to speak)
+    agentSpeakingCycle.push(...updatedSessions.map(({ id }) => id));
   }
 
   function randomlySelectAgentToSpeak() {
@@ -500,14 +522,14 @@ export function ConvAI() {
     <div className="min-h-screen bg-background text-foreground flex flex-col dark">
       <main className="flex flex-grow p-4 overflow-auto h-full items-center justify-center">
         <div
-          className="flex gap-4 justify-center items-center h-full"
+          className="flex gap-4 justify-center items-center h-full flex-wrap  flex-grow"
           style={{ height: '100%' }}
         >
           {participants.map((participant, index) => (
             <Card
               key={participant.id}
               className={cn(
-                'bg-card text-card-foreground min-w-[200px] sm:min-w-[300px] md:min-w-[500px] w-[50%] h-[50%]',
+                'bg-card text-card-foreground max-w-[80vw] flex-1',
                 participant.id === currentSpeakerId ? 'border-blue-500' : ''
               )}
             >
@@ -518,7 +540,6 @@ export function ConvAI() {
                     alt="avatar"
                     width={100}
                     height={100}
-                    className="w-[75%] h-[50%]"
                   />
                 </div>
                 <div className="flex items-center gap-2">
@@ -533,7 +554,8 @@ export function ConvAI() {
                     />
                     <AvatarFallback>
                       {participant.name
-                        ?.split(' ')
+                        ?.replace(/\s*\(.*?\)\s*/g, '')
+                        .split(' ')
                         .map((n) => n[0])
                         .join('')}
                     </AvatarFallback>
