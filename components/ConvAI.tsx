@@ -146,6 +146,8 @@ export function ConvAI() {
   );
   const [recordedChunks, setRecordedChunks] = useState<Blob[]>([]);
 
+  const [audioStream, setAudioStream] = useState<MediaStream | null>(null);
+
   useEffect(() => {
     console.log("timestamps: ", timestamps);
   }, [timestamps]);
@@ -183,10 +185,8 @@ export function ConvAI() {
   };
 
   useEffect(() => {
-    console.log(`presentationId:`, presentationId);
     if (presentationId) {
       prepareAgents(presentationId);
-      // console.log(`participants:`, participants);
     }
   }, [presentationId]);
 
@@ -199,20 +199,16 @@ export function ConvAI() {
       return;
     }
     await updateAgentsWithIntent(id, intent, agents);
-    console.log(
-      `sessions:`,
-      agents.reduce((acc, agent) => {
-        acc[agent.id] = null;
-        return acc;
-      }, {} as { [key: string]: Conversation | null })
-    );
 
     setParticipants(agents);
     setSessions(
-      agents.reduce((acc, agent) => {
-        acc[agent.id] = null;
-        return acc;
-      }, {} as { [key: string]: Conversation | null })
+      agents.reduce(
+        (acc, agent) => {
+          acc[agent.id] = null;
+          return acc;
+        },
+        {} as { [key: string]: Conversation | null }
+      )
     );
     setAvatarImages(agents.map((_) => getRandomAvatar()));
     setLoading(false);
@@ -265,7 +261,7 @@ export function ConvAI() {
         throw new Error("Failed to fetch presentation data");
       }
       const agents = (await response.json()) as Agent[];
-      console.log(`agents:`, agents);
+      // console.log(`agents:`, agents);
       return agents;
     } catch (error) {
       console.error("Error fetching presentation data:", error);
@@ -340,25 +336,27 @@ export function ConvAI() {
 
       // Add an end timestamp for the previous speaker
       if (timestamps.length === 0) {
+        const conversation_id = previousSpeakerId
+          ? sessions[previousSpeakerId]?.getId()
+          : null;
         setTimestamps([
           {
             start: 0,
             end: currTime,
-            conversation_id: previousSpeakerId
-              ? sessions[previousSpeakerId]?.getId() ?? null
-              : "user",
+            conversation_id: conversation_id ?? "user",
           },
         ]);
       } else {
         const prevEnd = timestamps[timestamps.length - 1];
+        const conversation_id = previousSpeakerId
+          ? sessions[previousSpeakerId]?.getId()
+          : null;
         setTimestamps((prev) => [
           ...prev,
           {
             start: prevEnd.end ?? 0,
             end: currTime,
-            conversation_id: previousSpeakerId
-              ? sessions[previousSpeakerId]?.getId() ?? null
-              : "user",
+            conversation_id: conversation_id ?? "user",
           },
         ]);
       }
@@ -379,7 +377,7 @@ export function ConvAI() {
   const handleCommand = async (action: string) => {
     switch (action) {
       case "start":
-        startAllConversations();
+        await startAllConversations();
         setIsRunning(true);
         setRecordingStatus("recording");
         startRecording();
@@ -401,12 +399,13 @@ export function ConvAI() {
         currentSpeakerId = null;
         await endConversation();
         setRecordingStatus("finished");
-        await uploadFinalRecording();
-        await getHighlights();
-        router.push(`/highlights/${presentationId}`);
+        stopAudioStreams();
         break;
       case "process":
         setRecordingStatus("processing");
+        await uploadFinalRecording();
+        // await getHighlights();
+        router.push(`/highlights/${presentationId}`);
         break;
     }
   };
@@ -531,10 +530,13 @@ export function ConvAI() {
       }
     }
     setSessions((prevSessions) =>
-      Object.keys(prevSessions).reduce((acc, key) => {
-        acc[Number(key)] = null;
-        return acc;
-      }, {} as { [key: number]: Conversation | null })
+      Object.keys(prevSessions).reduce(
+        (acc, key) => {
+          acc[Number(key)] = null;
+          return acc;
+        },
+        {} as { [key: number]: Conversation | null }
+      )
     );
     setParticipants((prevParticipants) =>
       prevParticipants.map((participant) => ({
@@ -557,6 +559,8 @@ export function ConvAI() {
           sampleRate: 16000,
         },
       });
+
+      setAudioStream(stream); // Store the stream
 
       // Check supported MIME types
       const mimeTypes = [
@@ -662,6 +666,13 @@ export function ConvAI() {
       } catch (error) {
         console.error("Error stopping recording:", error);
       }
+    }
+  };
+
+  const stopAudioStreams = () => {
+    if (audioStream) {
+      audioStream.getTracks().forEach((track) => track.stop());
+      setAudioStream(null); // Clear the stream after stopping
     }
   };
 
