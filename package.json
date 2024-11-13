@@ -10,8 +10,6 @@
   },
   "dependencies": {
     "@11labs/client": "0.0.2",
-    "@ffmpeg/ffmpeg": "^0.12.10",
-    "@ffmpeg/util": "^0.12.1",
     "@radix-ui/react-avatar": "^1.1.1",
     "@radix-ui/react-dialog": "^1.1.2",
     "@radix-ui/react-navigation-menu": "^1.2.1",

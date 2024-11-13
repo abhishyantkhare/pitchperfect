@@ -1,7 +1,7 @@
 "use client";
-import Image from "next/image";
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import Image from "next/image";
+import { useState, useEffect, useRef } from "react";
 
 import { useGlobalContext } from "@/app/context/GlobalContext";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -141,13 +141,6 @@ export function ConvAI() {
 
   const [timestamps, setTimestamps] = useState<Timestamp[]>([]);
 
-  const [audioRecorder, setAudioRecorder] = useState<MediaRecorder | null>(
-    null
-  );
-  const [recordedChunks, setRecordedChunks] = useState<Blob[]>([]);
-
-  const [audioStream, setAudioStream] = useState<MediaStream | null>(null);
-
   useEffect(() => {
     console.log("timestamps: ", timestamps);
   }, [timestamps]);
@@ -212,6 +205,16 @@ export function ConvAI() {
     );
     setAvatarImages(agents.map((_) => getRandomAvatar()));
     setLoading(false);
+  }
+
+  async function getHighlights() {
+    await fetch(`/api/presentation/${presentationId}/recording`, {
+      method: "POST",
+      body: JSON.stringify({
+        conversationIds: conversationIds,
+        timestamps: timestamps,
+      }),
+    });
   }
 
   async function updateAgentsWithIntent(
@@ -380,79 +383,40 @@ export function ConvAI() {
         await startAllConversations();
         setIsRunning(true);
         setRecordingStatus("recording");
-        startRecording();
         break;
       case "resume":
         setIsRunning(true);
         currentSpeakerId = null;
         setRecordingStatus("recording");
-        startRecording();
         break;
       case "pause":
         setIsRunning(false);
         currentSpeakerId = null;
         setRecordingStatus("paused");
-        stopRecording();
         break;
       case "finish":
         setIsRunning(false);
         currentSpeakerId = null;
         await endConversation();
         setRecordingStatus("finished");
-        stopAudioStreams();
         break;
       case "process":
         setRecordingStatus("processing");
-        await uploadFinalRecording();
-        // await getHighlights();
+        await getHighlights();
         router.push(`/highlights/${presentationId}`);
         break;
-    }
-  };
-
-  const uploadFinalRecording = async () => {
-    try {
-      // Add a 5 second delay before proceeding with upload
-      await new Promise((resolve) => setTimeout(resolve, 5000));
-      // Create a single blob from all recorded chunks
-      const audioBlob = new Blob(recordedChunks, { type: "audio/mp3" });
-      const formData = new FormData();
-      formData.append("audio", audioBlob, "recording.mp3");
-
-      // Upload the complete recording
-      const response = await fetch(
-        `/api/presentation/${presentationId}/recording`,
-        {
-          method: "POST",
-          body: formData,
-        }
-      );
-
-      if (!response.ok) {
-        throw new Error("Failed to upload recording");
-      }
-
-      const data = await response.json();
-      console.log("Recording uploaded and analyzed:", data);
-
-      // Clear the recorded chunks after successful upload
-      setRecordedChunks([]);
-      router.push(`/highlights/${presentationId}`);
-    } catch (error) {
-      console.error("Error uploading final recording:", error);
     }
   };
 
   async function startAllConversations() {
     const hasPermission = await requestMicrophonePermission();
     if (!hasPermission) {
-      alert("Microphone permission is required");
+      alert("No permission");
       return;
     }
 
     const updatedSessions = await Promise.all(
       participants.map(async (participant) => {
-        console.log(`Starting session for ${participant.name}`);
         const session = await Conversation.startSession({
           agentId: participant.elevenlabs_id ?? "",
           onConnect: () => {
@@ -478,16 +442,13 @@ export function ConvAI() {
                   agentSpeakingCycle.push(participant.id);
                 }
               }
-            } else if (mode === "listening") {
-              console.log(`${participant.name} stopped speaking`);
+            } else {
               if (currentSpeakerId === participant.id) {
                 currentSpeakerId = null;
-                startRecording();
               }
             }
           },
         });
-
         const sessionId = await session.getId();
         conversationIds.push(sessionId);
         if (participant.id === currentSpeakerId) {
@@ -545,136 +506,6 @@ export function ConvAI() {
       }))
     );
   }
-
-  useEffect(() => {
-    initializeAudioRecording();
-  }, []);
-
-  const initializeAudioRecording = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          sampleRate: 16000,
-        },
-      });
-
-      setAudioStream(stream); // Store the stream
-
-      // Check supported MIME types
-      const mimeTypes = [
-        "audio/webm",
-        "audio/webm;codecs=opus",
-        "audio/ogg;codecs=opus",
-      ];
-
-      const supportedType = mimeTypes.find((type) =>
-        MediaRecorder.isTypeSupported(type)
-      );
-
-      if (!supportedType) {
-        throw new Error("No supported audio MIME type found");
-      }
-
-      console.log("Using MIME type:", supportedType);
-
-      const recorder = new MediaRecorder(stream, {
-        mimeType: supportedType,
-        audioBitsPerSecond: 128000,
-      });
-
-      recorder.ondataavailable = (event) => {
-        console.log("Data available:", event.data.size);
-        if (event.data.size > 0) {
-          setRecordedChunks((prev) => [...prev, event.data]);
-        }
-      };
-
-      setAudioRecorder(recorder);
-    } catch (error) {
-      console.error("Error initializing audio recording:", error);
-    }
-  };
-
-  const startRecording = () => {
-    console.log("Starting recording...");
-    if (audioRecorder && audioRecorder.state === "inactive") {
-      setRecordedChunks([]);
-      try {
-        audioRecorder.start(1000); // Record in 1-second chunks
-        console.log("Recording started");
-      } catch (error) {
-        console.error("Error starting recording:", error);
-      }
-    }
-  };
-
-  const stopRecording = async () => {
-    console.log("Stopping recording...");
-    if (audioRecorder && audioRecorder.state === "recording") {
-      try {
-        // Register the dataavailable event handler before stopping
-        audioRecorder.addEventListener(
-          "dataavailable",
-          async (event) => {
-            console.log("Final chunk size:", event.data.size);
-            if (event.data.size > 0) {
-              const chunks = [...recordedChunks, event.data];
-              console.log("Total chunks:", chunks.length);
-
-              const audioBlob = new Blob(chunks, {
-                type: audioRecorder.mimeType,
-              });
-              console.log("Final blob size:", audioBlob.size);
-
-              const formData = new FormData();
-              formData.append(
-                "audio",
-                audioBlob,
-                `recording.${
-                  audioRecorder.mimeType.split(";")[0].split("/")[1]
-                }`
-              );
-
-              try {
-                const response = await fetch(
-                  `/api/presentation/${presentationId}/recording`,
-                  {
-                    method: "POST",
-                    body: formData,
-                  }
-                );
-
-                if (!response.ok) {
-                  throw new Error("Failed to upload recording");
-                }
-
-                const data = await response.json();
-                console.log("Recording uploaded successfully:", data);
-              } catch (error) {
-                console.error("Error uploading recording:", error);
-              }
-            }
-            setRecordedChunks([]);
-          },
-          { once: true }
-        ); // Remove the event listener after it fires once
-
-        audioRecorder.stop();
-        console.log("Recording stopped");
-      } catch (error) {
-        console.error("Error stopping recording:", error);
-      }
-    }
-  };
-
-  const stopAudioStreams = () => {
-    if (audioStream) {
-      audioStream.getTracks().forEach((track) => track.stop());
-      setAudioStream(null); // Clear the stream after stopping
-    }
-  };
 
   if (loading) {
     return (
