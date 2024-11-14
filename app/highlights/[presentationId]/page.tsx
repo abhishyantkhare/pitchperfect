@@ -19,23 +19,13 @@ type WeakArea = {
   transcript: string;
 };
 
-// Define a type for the API response
-type ApiResponse = {
-  id: string;
-  created_at: string;
-  topic: string;
-  weak_areas: {
-    weak_areas: WeakArea[];
-  };
-  audio_file: string;
-  signedAudioUrl: string;
-};
-
 // Define a type for the presentation data
 type PresentationData = {
   id: string;
   created_at: string;
   topic: string;
+  number_ums: number;
+  number_likes: number;
   weak_areas: {
     weak_areas: WeakArea[];
   };
@@ -65,7 +55,7 @@ const fetchPresentationData = async (
       throw new Error("Failed to fetch presentation data");
     }
 
-    const data: ApiResponse = await response.json();
+    const data: PresentationData = await response.json();
     console.log("data", data);
 
     return data;
@@ -157,8 +147,10 @@ export default function Component() {
     return (
       <div className="min-h-screen bg-background text-foreground flex flex-col dark">
         <main className="flex flex-grow p-4 overflow-auto h-full flex-col items-center justify-center">
-          <Spinner />
-          <p className="text-white">Compiling highlights...</p>
+          <div className="flex flex-col gap-4">
+            <Spinner />
+            <p className="text-white">Compiling highlights...</p>
+          </div>
         </main>
       </div>
     );
@@ -177,12 +169,30 @@ export default function Component() {
       <Card className="bg-black border-gray-800">
         <CardHeader>
           <CardTitle className="text-2xl md:text-3xl text-left text-white">
-            {presentationData.topic}
+            Presentation: {presentationData.topic}
           </CardTitle>
         </CardHeader>
         <CardContent>
-          {/* <ScrollArea className="h-[calc(100vh-200px)]"> */}
           <div className="space-y-6 h-full">
+            <div className="flex gap-8 w-full justify-center">
+              <Card className="bg-gray-800 text-white min-w-[25%]">
+                <CardContent className="flex flex-col items-center gap-2 justify-center  p-4">
+                  <p className="text-5xl font-bold ">
+                    {presentationData.number_ums}
+                  </p>
+                  <h3 className="text-lg ">Number of Ums/Uhs Said</h3>
+                </CardContent>
+              </Card>
+              <Card className="bg-gray-800 text-white min-w-[25%]">
+                <CardContent className="flex flex-col items-center gap-2 justify-center  p-4">
+                  <p className="text-5xl font-bold ">
+                    {presentationData.number_likes}
+                  </p>
+                  <h3 className="text-lg ">Number of Likes Said</h3>
+                </CardContent>
+              </Card>
+            </div>
+
             <audio
               id="audio-player"
               controls
@@ -191,54 +201,60 @@ export default function Component() {
               <source src={presentationData.signedAudioUrl} type="audio/mp3" />
               Presentation: Your browser does not support the audio element.
             </audio>
+            <ScrollArea className="h-[calc(100vh-400px)]">
+              <div className="space-y-6">
+                {presentationData.weak_areas.weak_areas.map((area, index) => (
+                  <Card key={index} className="bg-gray-800 text-white p-4">
+                    <div className="flex justify-between items-start flex-col gap-4">
+                      <div className="w-full flex flex-col gap-2">
+                        <h3 className="text-lg font-bold flex flex-row gap-2 items-center">
+                          <span className="text-white whitespace-nowrap">
+                            Weak Area {index + 1}:
+                          </span>
+                          <div className="flex flex-row gap-2 justify-start w-full ">
+                            <p className="">[{area.start_time}s]</p>
+                            <p className=" italic font-bold ">
+                              {" "}
+                              ...
+                              {area.transcript
+                                .replace("User:", "")
+                                .replace("Me:", "")
+                                .replace('""', "")
+                                .replace('"', "")
+                                .trim()}
+                              ...
+                            </p>
+                          </div>
+                        </h3>
 
-            {presentationData.weak_areas.weak_areas.map((area, index) => (
-              <Card key={index} className="bg-gray-800 text-white p-4">
-                <div className="flex justify-between items-start flex-col gap-4">
-                  <div className="w-full flex flex-col gap-2">
-                    <h3 className="text-lg font-bold flex flex-row gap-2 items-center">
-                      <span className="text-white whitespace-nowrap">
-                        Weak Area {index + 1}:
-                      </span>
-                      <div className="flex flex-row gap-2 justify-start w-full ">
-                        <p className="">[{area.start_time}s]</p>
-                        <p className=" italic font-bold ">
-                          {" "}
-                          ...
-                          {area.transcript
-                            .replace("User:", "")
-                            .replace('""', "")
-                            .replace('"', "")
-                            .trim()}
-                          ...
+                        <p className="text-sm">
+                          <span className="font-bold">Issue:</span>{" "}
+                          {area.explanation}
+                        </p>
+                        <p className="text-sm">
+                          <span className="font-bold">Improvement:</span>{" "}
+                          {area.improvement}
                         </p>
                       </div>
-                    </h3>
-
-                    <p className="text-sm">
-                      <span className="font-bold">Explanation:</span>{" "}
-                      {area.explanation}
-                    </p>
-                    <p className="text-sm">
-                      <span className="font-bold">Improvement:</span>{" "}
-                      {area.improvement}
-                    </p>
-                  </div>
-                  <Button
-                    onClick={() => {
-                      const audioElement = document.getElementById(
-                        "audio-player"
-                      ) as HTMLAudioElement;
-                      handlePlayFromTimestamp(audioElement, area.start_time);
-                    }}
-                  >
-                    Play
-                  </Button>
-                </div>
-              </Card>
-            ))}
+                      <Button
+                        onClick={() => {
+                          const audioElement = document.getElementById(
+                            "audio-player"
+                          ) as HTMLAudioElement;
+                          handlePlayFromTimestamp(
+                            audioElement,
+                            area.start_time
+                          );
+                        }}
+                      >
+                        Play
+                      </Button>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            </ScrollArea>
           </div>
-          {/* </ScrollArea> */}
         </CardContent>
       </Card>
     </div>

@@ -30,11 +30,11 @@ You are the world's best presentation coach.
 
 You will be given a transcript of a presentation and your job is to highlight the areas of the presentation that are not good.
 
-We have agents that are conversing with the user and asking questions. You want to focus on the following:
-- Are there areas where the user is using filler words? Like "um", "ah", "like", etc.
-- Are there areas where the user is not speaking clearly?
-- Are there areas where the user did not clearly communicate their point?
-- Are there areas where the user did not answer an audience question well?
+We have agents that I am conversing with and asking me questions. You want to focus on the following:
+- Are there areas where I am using filler words? Like "um", "ah", "like", etc.
+- Are there areas where I am is not speaking clearly?
+- Are there areas where I am did not clearly communicate their point?
+- Are there areas where I am did not answer an audience question well?
 
 You will be given the transcript in the format of a list of tuples with the start time (in seconds), speaker, and text, like this:
 '''
@@ -43,13 +43,13 @@ You will be given the transcript in the format of a list of tuples with the star
 
 For example:
 '''
-  0:User: "Today, I want to talk about...",
+  0:Me: "Today, I want to talk about...",
   56:Agent: "I was curious about...",
-  234:User: "What is that?",
+  234:Me: "What is that?",
   ...
 '''
 
-You will output the list of the areas that are not good along with an explanation for why they are not good.
+You will output the list of the areas that are not good along with an explanation for why these sections are not good.
 The response should be in a json format like so:
 {
   "weak_areas": [
@@ -114,7 +114,7 @@ async function spliceAudioFiles(
       .run();
   });
   outputFilePaths.push(firstOutputFilePath);
-  const transcriptString = await transcribe(firstOutputFilePath, 0, "User");
+  const transcriptString = await transcribe(firstOutputFilePath, 0, "Me");
 
   transcriptStrings.push(transcriptString);
 
@@ -138,7 +138,7 @@ async function spliceAudioFiles(
     if (speakingTime.conversation_id === "user") {
       // User speaking, so we just use the first audio file
       tempFilePath = audioFiles[0];
-      currSpeaker = "User";
+      currSpeaker = "Me";
     }
 
     // 3. Create the output file path
@@ -301,6 +301,8 @@ export async function POST(
       };
     });
 
+
+
     // Send the transcript to the highlight system prompt
     const highlightResponse = await openai.beta.chat.completions.parse({
       messages: [
@@ -359,10 +361,15 @@ export async function POST(
     //       .upload(`${presentationId}/weak_area_clips/clip_${index}.mp3`, clip)
     // );
 
+    const numberUmsOrUhs = (transcriptString.match(/ (um|uh)/g) || []).length;
+    const numberLikes = (transcriptString.match(/ like/g) || []).length;
+
     const supabase = await createClient();
     await supabase.from('presentations').update({
       weak_areas: highlightResponseData,
-      audio_file: `${presentationId}/combined_audio.mp3`
+      audio_file: `${presentationId}/combined_audio.mp3`,
+      number_ums: numberUmsOrUhs,
+      number_likes: numberLikes,
     }).eq('id', presentationId);
 
 
