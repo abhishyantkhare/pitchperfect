@@ -71,8 +71,8 @@ type Agent = {
 
 export type Timestamp = {
   start: number;
-  end: number | null;
-  conversation_id: string | null;
+  end: number;
+  conversation_id: string;
 };
 
 let updateQueue: (() => void)[] = [];
@@ -208,6 +208,8 @@ export function ConvAI() {
   }
 
   async function getHighlights() {
+    console.log(`getHighlights::conversationIds:`, conversationIds);
+    console.log(`getHighlights::timestamps:`, timestamps);
     await fetch(`/api/presentation/${presentationId}/recording`, {
       method: "POST",
       body: JSON.stringify({

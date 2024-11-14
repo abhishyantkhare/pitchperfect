@@ -1,6 +1,7 @@
 "use client";
 
 import Spinner from "@/components/Spinner";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
@@ -10,81 +11,68 @@ import { useEffect, useState } from "react";
 
 const SUPABASE_BUCKET_NAME = "pitchperfectfiles";
 
+// Define a type for the weak area
+type WeakArea = {
+  start_time: number;
+  explanation: string;
+  improvement: string;
+  transcript: string;
+};
+
+// Define a type for the API response
+type ApiResponse = {
+  id: string;
+  created_at: string;
+  topic: string;
+  weak_areas: {
+    weak_areas: WeakArea[];
+  };
+  audio_file: string;
+  signedAudioUrl: string;
+};
+
 // Define a type for the presentation data
 type PresentationData = {
-  presentationTitle: string;
+  id: string;
+  created_at: string;
+  topic: string;
   weak_areas: {
-    id: string;
-    explanation: string;
-  }[];
+    weak_areas: WeakArea[];
+  };
+  audio_file: string;
+  signedAudioUrl: string;
 };
 
 // This is a mock function to simulate fetching data from the server
-const fetchPresentationData = async (presentationId: string) => {
+const fetchPresentationData = async (
+  presentationId: string
+): Promise<PresentationData | null> => {
   console.log("fetching presentation data for presentationId:", presentationId);
   try {
-    // const response = await fetch(
-    //   `/api/presentation/${presentationId}/recording`,
-    //   {
-    //     method: 'POST',
-    //     headers: {
-    //       'Content-Type': 'application/json',
-    //     },
-    //     body: JSON.stringify({
-    //       /* Add any necessary request body data here */
-    //     }),
-    //   }
-    // );
+    console.log(`/api/presentation/${presentationId}/recording`);
+    const response = await fetch(
+      `/api/presentation/${presentationId}/recording`,
+      {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      }
+    );
+    console.log("response", response);
 
-    // if (!response.ok) {
-    //   throw new Error('Failed to fetch presentation data');
-    // }
+    if (!response.ok) {
+      throw new Error("Failed to fetch presentation data");
+    }
 
-    // const data = await response.json();
-    // return {
-    //   presentationTitle: 'Effective Public Speaking Techniques', // Assuming the title is static or fetched elsewhere
-    //   weak_areas: data.highlightResponseData.weak_areas.map((area: any) => ({
-    //     id: `clip${area.id}`,
-    //     explanation: area.explanation,
-    //   })),
-    // };
-    return {
-      presentationTitle: "Effective Public Speaking Techniques", // Assuming the title is static or fetched elsewhere
-      weak_areas: [],
-    };
+    const data: ApiResponse = await response.json();
+    console.log("data", data);
+
+    return data;
   } catch (error) {
     console.error("Error fetching presentation data:", error);
     return null;
   }
-};
-
-// Function to generate feedback based on index
-const getFeedbackForIndex = (
-  feedbackOptions: [],
-  presentationId: string,
-  index: number
-) => {
-  // const feedbackOptions = [
-  //   "Great job on maintaining eye contact with the audience!",
-  //   "Consider using more visuals to support your points.",
-  //   "Your pacing was excellent, but try to vary your tone for emphasis.",
-  //   "The introduction was strong, but the conclusion could be more impactful.",
-  //   "Try to engage the audience with questions or interactive elements.",
-  //   "Your content was well-organized, but ensure to highlight key takeaways.",
-  //   "Consider reducing filler words to make your speech more concise.",
-  //   "Your enthusiasm was contagious, keep it up!",
-  //   "The examples you used were relevant and helped clarify your points.",
-  //   "Try to incorporate more storytelling to make your presentation memorable.",
-  // ];
-
-  for (const area of feedbackOptions || []) {
-    console.log("area", area);
-    if (index === area?.id) {
-      return area?.explanation;
-    }
-    console.log(area);
-  }
-  console.log("presentationId", presentationId);
 };
 
 export default function Component() {
@@ -95,6 +83,7 @@ export default function Component() {
     useState<PresentationData | null>(null);
   const [audioUrls, setAudioUrls] = useState<string[]>([]);
   const [feedbackOptions, setFeedbackOptions] = useState<[]>([]);
+  const [isPageLoading, setIsPageLoading] = useState(true);
 
   useEffect(() => {
     if (!presentationId) return; // Ensure presentationId is available
@@ -148,8 +137,6 @@ export default function Component() {
     loadData();
   }, [presentationId]); // Add presentationId as a dependency
 
-  const [isPageLoading, setIsPageLoading] = useState(true);
-
   useEffect(() => {
     const timer = setTimeout(() => {
       setIsPageLoading(false);
@@ -157,6 +144,15 @@ export default function Component() {
 
     return () => clearTimeout(timer);
   }, []);
+
+  const handlePlayFromTimestamp = (
+    audioElement: HTMLAudioElement,
+    timestamp: number
+  ) => {
+    audioElement.currentTime = timestamp;
+    audioElement.play();
+  };
+
   if (isPageLoading) {
     return (
       <div className="min-h-screen bg-background text-foreground flex flex-col dark">
@@ -181,68 +177,58 @@ export default function Component() {
       <Card className="bg-black border-gray-800">
         <CardHeader>
           <CardTitle className="text-2xl md:text-3xl text-left text-white">
-            {presentationData.presentationTitle}
+            {presentationData.topic}
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <ScrollArea className="h-[calc(100vh-200px)]">
-            <div className="space-y-6">
-              {presentationData.weak_areas.map((clip, index) => (
-                <div key={clip.id} className="border border-gray-800">
-                  {index > 0 && <Separator className="my-6 bg-gray-800" />}
-                  <div className="space-y-4">
-                    <h2 className="text-lg md:text-xl text-gray-200">
-                      Highlight Clip {index + 1}
-                    </h2>
-                    <div className="aspect-video bg-gray-900 flex items-center justify-center">
-                      {audioUrls[index] ? (
-                        <audio controls>
-                          <source src={audioUrls[index]} type="audio/mp3" />
-                          Your browser does not support the audio element.
-                        </audio>
-                      ) : (
-                        <span className="text-gray-400">Loading audio...</span>
-                      )}
+          {/* <ScrollArea className="h-[calc(100vh-200px)]"> */}
+          <div className="space-y-6 h-full">
+            <audio id="audio-player" controls className="w-full">
+              <source src={presentationData.signedAudioUrl} type="audio/mp3" />
+              Presentation: Your browser does not support the audio element.
+            </audio>
+            {presentationData.weak_areas.weak_areas.map((area, index) => (
+              <Card key={index} className="bg-gray-800 text-white p-4">
+                <div className="flex justify-between items-start flex-col gap-4">
+                  <div className="w-full flex flex-col gap-2">
+                    <h3 className="text-lg font-bold">Weak Area {index + 1}</h3>
+                    <div className="flex flex-row gap-2 justify-start w-full ">
+                      <p className="text-sm">{area.start_time}s:</p>
+                      <p className="text-sm italic font-bold ">
+                        {" "}
+                        ...
+                        {area.transcript
+                          .replace("User:", "")
+                          .replace('""', "")
+                          .replace('"', "")
+                          .trim()}
+                        ...
+                      </p>
                     </div>
-                    <p className="text-sm md:text-base text-gray-300">
-                      {getFeedbackForIndex(
-                        feedbackOptions,
-                        presentationId,
-                        index
-                      )}
+                    <p className="text-sm">
+                      <span className="font-bold">Explanation:</span>{" "}
+                      {area.explanation}
+                    </p>
+                    <p className="text-sm">
+                      <span className="font-bold">Improvement:</span>{" "}
+                      {area.improvement}
                     </p>
                   </div>
+                  <Button
+                    onClick={() => {
+                      const audioElement = document.getElementById(
+                        "audio-player"
+                      ) as HTMLAudioElement;
+                      handlePlayFromTimestamp(audioElement, area.start_time);
+                    }}
+                  >
+                    Play from here
+                  </Button>
                 </div>
-              ))}
-              {audioUrls.map((url, index) => (
-                <div key={url} className="">
-                  {<Separator className="my-6 bg-gray-800" />}
-                  <div className="space-y-2">
-                    <h2 className="text-lg md:text-xl text-gray-200 p-2 font-bold ">
-                      Highlight Clip {index + 1}
-                    </h2>
-                    <div className=" bg-transparent flex items-start justify-start">
-                      {url ? (
-                        <audio controls>
-                          <source src={url} type="audio/mp3" />
-                          Your browser does not support the audio element.
-                        </audio>
-                      ) : (
-                        <span className="text-gray-400">Loading audio...</span>
-                      )}
-                    </div>
-                    <p className="text-sm md:text-base text-gray-300">
-                      {getFeedbackForIndex(
-                        feedbackOptions,
-                        presentationId,
-                        index
-                      )}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </ScrollArea>
+              </Card>
+            ))}
+          </div>
+          {/* </ScrollArea> */}
         </CardContent>
       </Card>
     </div>
