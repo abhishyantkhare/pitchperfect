@@ -79,6 +79,7 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-black text-white font-[family-name:var(--font-geist-sans)] w-screen">
       <main className="flex flex-col items-center justify-center min-h-screen gap-8 p-8 sm:p-20">
+        <h2 className="text-5xl font-bold">Pitch Perfect</h2>
         <div className="flex flex-col gap-4 w-full max-w-2xl">
           <h2 className="text-2xl font-semibold text-center">
             What do you want to practice today?

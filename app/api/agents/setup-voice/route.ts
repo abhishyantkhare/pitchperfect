@@ -3,9 +3,9 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/utils/supabase/server";
 import { ElevenLabsService } from "../../services/ElevenLabsService";
 import {
-    elevenLabsSystemPrompt,
-    elevenLabsSystemPromptWithIntent,
-    getPresentationPreSignedUrls,
+  elevenLabsSystemPrompt,
+  elevenLabsSystemPromptWithIntent,
+  getPresentationPreSignedUrls,
 } from "./utils";
 
 export async function POST(request: Request) {
@@ -16,7 +16,8 @@ export async function POST(request: Request) {
     const supabase = await createClient();
 
     // Create the voice preview in ElevenLabs
-    const text = "Hello! I'm excited to demonstrate my voice capabilities. I can speak clearly and naturally, with proper intonation and emphasis. This sample will help generate a high-quality voice preview.";
+    const text =
+      "Hello! I'm excited to demonstrate my voice capabilities. I can speak clearly and naturally, with proper intonation and emphasis. This sample will help generate a high-quality voice preview.";
     const elevenLabsVoiceData = await ElevenLabsService.createVoicePreview(
       voiceDescription + ". They only ask one question at a time.",
       text
@@ -261,7 +262,7 @@ export async function PATCH(request: Request) {
       elevenLabsAgentId,
       newAgentBody
     );
-    console.log("elevenLabsUpdateAgentResult", elevenLabsUpdateAgentResult);
+    // console.log("elevenLabsUpdateAgentResult", elevenLabsUpdateAgentResult);
 
     // Update the agent in Supabase with the voice details
     const { error: updateError } = await supabase
