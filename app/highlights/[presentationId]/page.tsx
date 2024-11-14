@@ -183,28 +183,38 @@ export default function Component() {
         <CardContent>
           {/* <ScrollArea className="h-[calc(100vh-200px)]"> */}
           <div className="space-y-6 h-full">
-            <audio id="audio-player" controls className="w-full">
+            <audio
+              id="audio-player"
+              controls
+              className="w-full rounded-md bg-black border-white"
+            >
               <source src={presentationData.signedAudioUrl} type="audio/mp3" />
               Presentation: Your browser does not support the audio element.
             </audio>
+
             {presentationData.weak_areas.weak_areas.map((area, index) => (
               <Card key={index} className="bg-gray-800 text-white p-4">
                 <div className="flex justify-between items-start flex-col gap-4">
                   <div className="w-full flex flex-col gap-2">
-                    <h3 className="text-lg font-bold">Weak Area {index + 1}</h3>
-                    <div className="flex flex-row gap-2 justify-start w-full ">
-                      <p className="text-sm">{area.start_time}s:</p>
-                      <p className="text-sm italic font-bold ">
-                        {" "}
-                        ...
-                        {area.transcript
-                          .replace("User:", "")
-                          .replace('""', "")
-                          .replace('"', "")
-                          .trim()}
-                        ...
-                      </p>
-                    </div>
+                    <h3 className="text-lg font-bold flex flex-row gap-2 items-center">
+                      <span className="text-white whitespace-nowrap">
+                        Weak Area {index + 1}:
+                      </span>
+                      <div className="flex flex-row gap-2 justify-start w-full ">
+                        <p className="">[{area.start_time}s]</p>
+                        <p className=" italic font-bold ">
+                          {" "}
+                          ...
+                          {area.transcript
+                            .replace("User:", "")
+                            .replace('""', "")
+                            .replace('"', "")
+                            .trim()}
+                          ...
+                        </p>
+                      </div>
+                    </h3>
+
                     <p className="text-sm">
                       <span className="font-bold">Explanation:</span>{" "}
                       {area.explanation}
@@ -222,7 +232,7 @@ export default function Component() {
                       handlePlayFromTimestamp(audioElement, area.start_time);
                     }}
                   >
-                    Play from here
+                    Play
                   </Button>
                 </div>
               </Card>
